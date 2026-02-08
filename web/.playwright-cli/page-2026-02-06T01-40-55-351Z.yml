@@ -1,0 +1,66 @@
+- generic [ref=e3]:
+  - generic [ref=e4]:
+    - generic [ref=e9]: Gasless Swap (ERC‑4337 v0.7)
+    - generic [ref=e10]: UP
+  - generic [ref=e11]:
+    - generic [ref=e12]:
+      - heading "Swap" [level=2] [ref=e14]
+      - generic [ref=e15]: Amount (tokenIn)
+      - generic [ref=e16]:
+        - textbox "0.0" [ref=e17]: "1000"
+        - button "Get quote" [ref=e18] [cursor=pointer]
+      - generic [ref=e20]: Slippage (bps)
+      - generic [ref=e21]:
+        - textbox "50" [ref=e22]
+        - generic [ref=e23]: 0.50%
+      - generic [ref=e25]: Bundler
+      - combobox [ref=e26]:
+        - option "bundler1 (bundler1_4ae9c5f3a5ec) — Strict — minPrio 2 gwei" [selected]
+        - option "bundler2 (bundler2_d4d0d3795c8c) — Fast — minPrio 0.2 gwei"
+      - generic [ref=e28]:
+        - generic [ref=e29]:
+          - generic [ref=e30]: Expected out
+          - generic [ref=e31]: —
+        - generic [ref=e32]:
+          - generic [ref=e33]: Min out
+          - generic [ref=e34]: —
+      - button "Gasless Swap" [disabled] [ref=e37]
+    - generic [ref=e38]:
+      - generic [ref=e39]:
+        - heading "Status" [level=2] [ref=e40]
+        - generic [ref=e41]: No wallet
+      - generic [ref=e42]:
+        - generic [ref=e43]:
+          - generic [ref=e44]: Owner (EOA)
+          - generic [ref=e45]: —
+        - generic [ref=e46]:
+          - generic [ref=e47]: Smart Account
+          - generic [ref=e48]: —
+      - button "Connect Dev Wallet" [ref=e50] [cursor=pointer]
+      - generic [ref=e52]:
+        - generic [ref=e53]:
+          - generic [ref=e54]: Quote requested
+          - generic [ref=e55]: —
+        - generic [ref=e56]:
+          - generic [ref=e57]: Build UserOperation
+          - generic [ref=e58]: —
+        - generic [ref=e59]:
+          - generic [ref=e60]: Signature requested
+          - generic [ref=e61]: —
+        - generic [ref=e62]:
+          - generic [ref=e63]: Submitted to bundler
+          - generic [ref=e64]: —
+        - generic [ref=e65]:
+          - generic [ref=e66]: Included on-chain
+          - generic [ref=e67]: —
+        - generic [ref=e68]:
+          - generic [ref=e69]: Swap success
+          - generic [ref=e70]: —
+        - generic [ref=e71]:
+          - generic [ref=e72]: Swap failed
+          - generic [ref=e73]: —
+      - generic [ref=e75]: UserOp
+      - generic [ref=e76]: —
+      - generic [ref=e78]: Tx
+      - generic [ref=e79]: —
+  - generic [ref=e80]: "monitor: http://127.0.0.1:3002 • quote: http://127.0.0.1:3001 • rpc: http://127.0.0.1:8545"

@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+
+# Local Dev Data & Logs
+output/
+logs/
+*.log
+
+# Build Artifacts
+dist/
+dist-ssr/
+out/
+cache/
+
+# OS/Editor Files
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+!.vscode/launch.json
+.idea/
+*.swp
+
+# Environment
+.env
+.env.local
+
+# Foundry/Forge Specific
+broadcast/

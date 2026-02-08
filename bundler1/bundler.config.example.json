@@ -1,0 +1,21 @@
+{
+  "autoBundleInterval": 5,
+  "autoBundleMempoolSize": 1,
+  "beneficiary": "0x0000000000000000000000000000000000000000",
+  "entryPoint": "0x0000000071727De22E5E9d8BAf0edAc6f37da032",
+  "maxBundleGas": 5000000,
+  "minBalance": "0",
+  "mnemonic": "./bundler.mnemonic.txt",
+  "network": "https://api.avax-test.network/ext/bc/C/rpc",
+  "port": "3003",
+  "policy": {
+    "strict": true,
+    "minPriorityFeeGwei": 2,
+    "minMaxFeeGwei": 25,
+    "minValidUntilSeconds": 30
+  },
+  "observability": {
+    "monitorUrl": "http://127.0.0.1:3002",
+    "service": "bundler1"
+  }
+}

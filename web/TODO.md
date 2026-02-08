@@ -1,0 +1,21 @@
+# web/TODO
+
+- [x] Choose UI stack (custom CSS)
+- [x] Implement dark macOS-like layout shell
+- [x] Swap screen: inputs, quote fetch, countdown
+- [x] Bundler selector + availability indicator
+- [x] Build UserOperation + signature flow
+- [x] Submit to bundler + on-chain confirmation (EntryPoint logs)
+- [x] Fee+gas estimation loop (paymaster-valid simulation; refine fee before signature)
+- [ ] Activity list + details drawer (UserOp + decoded calls)
+- [x] Failure UX: expired quote rebuild, bundler auto-failover, on-chain revert decoding (gasless-first; “pay gas yourself” offered only on failure)
+- [x] Paid fallback execution: direct user-paid router swap from owner wallet
+- [x] Telemetry: heartbeat (sessions) to `paymaster_monitor/server`
+- [ ] Telemetry: structured events to `paymaster_monitor/server`
+- [x] Dev wallet mode for automation (`VITE_DEV_PRIVATE_KEY`)
+- [x] Synthetic E2E: Playwright happy-path gasless swap
+- [x] Synthetic E2E: Playwright bundler failover (injected failure)
+- [x] Synthetic E2E: Playwright paid fallback (gasless denial -> user-paid success)
+- [x] Soak coverage via root batch runner (`scripts/soak-gasless.sh`)
+- [x] Soak coverage profile for paid fallback (`SOAK_PROFILE=paid-fallback`)
+- [x] Remove non-functional window control dots from titlebar

@@ -1,0 +1,152 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "local: up (auto full stack)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "cd ${workspaceFolder} && ./scripts/dev-up.sh"
+    },
+    {
+      "name": "local: down (auto full stack)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "cd ${workspaceFolder} && ./scripts/dev-down.sh"
+    },
+    {
+      "name": "local: anvil (chain 31337)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "anvil --mnemonic 'test test test test test test test test test test test junk' --chain-id 31337"
+    },
+    {
+      "name": "local: bundler engine build",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "cd ${workspaceFolder}/bundler && npm run build"
+    },
+    {
+      "name": "local: paymaster deploy (anvil)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "cd ${workspaceFolder}/paymaster && DEPLOYER_PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 forge script script/Deploy.s.sol:Deploy --rpc-url http://127.0.0.1:8545 --broadcast"
+    },
+    {
+      "name": "local: paymaster export abis",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "cd ${workspaceFolder}/paymaster && ./scripts/export-abis.sh local"
+    },
+    {
+      "name": "local: monitor dev",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "cd ${workspaceFolder}/paymaster_monitor/server && RPC_URL=http://127.0.0.1:8545 DEPLOYMENTS_PATH=../../paymaster/deployments/local/addresses.json ADMIN_TOKEN=dev_admin_token BUNDLER_PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 npm run dev"
+    },
+    {
+      "name": "local: quote service dev",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "cd ${workspaceFolder}/quote_service && RPC_URL=http://127.0.0.1:8545 DEPLOYMENTS_PATH=../paymaster/deployments/local/addresses.json npm run dev"
+    },
+    {
+      "name": "local: user web dev (dev wallet)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "cd ${workspaceFolder}/web && VITE_RPC_URL=http://127.0.0.1:8545 VITE_MONITOR_URL=http://127.0.0.1:3002 VITE_QUOTE_SERVICE_URL=http://127.0.0.1:3001 VITE_DEV_PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 npm run dev"
+    },
+    {
+      "name": "local: admin web dev",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "cd ${workspaceFolder}/paymaster_monitor/web && VITE_MONITOR_URL=http://127.0.0.1:3002 VITE_ADMIN_TOKEN=dev_admin_token npm run dev"
+    },
+    {
+      "name": "local: explorer dev",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "cd ${workspaceFolder}/explorer && VITE_RPC_URL=http://127.0.0.1:8545 npm run dev -- --port 5175"
+    },
+    {
+      "name": "local: spawn bundler1+bundler2",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "curl -fsS -X POST http://127.0.0.1:3002/api/admin/bundlers/spawn -H 'authorization: Bearer dev_admin_token' -H 'content-type: application/json' -d '{\"base\":\"bundler1\"}' && curl -fsS -X POST http://127.0.0.1:3002/api/admin/bundlers/spawn -H 'authorization: Bearer dev_admin_token' -H 'content-type: application/json' -d '{\"base\":\"bundler2\"}'"
+    },
+    {
+      "name": "test: web e2e gasless swap",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "cd ${workspaceFolder}/web && E2E_OWNER_PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 npm run e2e:swap"
+    },
+    {
+      "name": "test: web e2e bundler failover",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "cd ${workspaceFolder}/web && E2E_OWNER_PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 npm run e2e:failover"
+    },
+    {
+      "name": "test: web e2e paid fallback",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "cd ${workspaceFolder}/web && E2E_OWNER_PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 npm run e2e:paid-fallback"
+    },
+    {
+      "name": "test: soak gasless swaps (auto stack)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "cd ${workspaceFolder} && SOAK_OWNER_PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 SOAK_ITERATIONS=10 SOAK_PROFILE=swap ./scripts/soak-gasless.sh"
+    },
+    {
+      "name": "test: soak bundler failover (auto stack)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "cd ${workspaceFolder} && SOAK_OWNER_PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 SOAK_ITERATIONS=5 SOAK_PROFILE=failover ./scripts/soak-gasless.sh"
+    },
+    {
+      "name": "test: soak paid fallback (auto stack)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "cd ${workspaceFolder} && SOAK_OWNER_PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 SOAK_ITERATIONS=5 SOAK_PROFILE=paid-fallback ./scripts/soak-gasless.sh"
+    },
+    {
+      "name": "test: soak analyzer (synthetic)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "cd ${workspaceFolder} && node --test scripts/soak-analyze.test.mjs"
+    },
+    {
+      "name": "report: latest soak results (manual review)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "cd ${workspaceFolder} && node scripts/soak-report-latest.mjs"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "local: services (monitor + quote + user web)",
+      "configurations": [
+        "local: monitor dev",
+        "local: quote service dev",
+        "local: user web dev (dev wallet)"
+      ]
+    },
+    {
+      "name": "local: ui (user web + admin web)",
+      "configurations": [
+        "local: user web dev (dev wallet)",
+        "local: admin web dev"
+      ]
+    },
+    {
+      "name": "local: full stack (manual services)",
+      "configurations": [
+        "local: monitor dev",
+        "local: quote service dev",
+        "local: user web dev (dev wallet)",
+        "local: admin web dev",
+        "local: explorer dev"
+      ]
+    }
+  ]
+}
