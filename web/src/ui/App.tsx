@@ -2,6 +2,20 @@ import { useEffect, useMemo, useState } from "react";
 import { BigNumber, ethers } from "ethers";
 
 import type { BundlerInstance, Deployments, HexString, Quote, QuoteRequest, SwapStep, UserOpV07 } from "../utils/types";
+
+type BundlerQuote = {
+  bundlerId: string;
+  bundlerName: string;
+  feeAmount: string;
+  isAvailable: boolean;
+  error?: string;
+};
+
+type LogEntry = {
+  id: string;
+  time: string;
+  msg: string;
+};
 import { fetchBundlers, fetchDeployments, fetchQuote, postTelemetryEvent } from "../utils/api";
 import {
   buildExecuteBatchCallData,
@@ -209,6 +223,7 @@ export function App() {
   const [amountInUi, setAmountInUi] = useState<string>("1000");
   const [slippageBps, setSlippageBps] = useState<number>(DEFAULT_SLIPPAGE_BPS);
   const [selectedBundlerId, setSelectedBundlerId] = useState<string>("");
+  const [selectedTokenSymbol, setSelectedTokenSymbol] = useState<string>("USDC");
 
   const [quote, setQuote] = useState<Quote | null>(null);
   const [quoteNowSec, setQuoteNowSec] = useState<number>(Math.floor(Date.now() / 1000));
@@ -218,7 +233,17 @@ export function App() {
   const [userOpHash, setUserOpHash] = useState<HexString | null>(null);
   const [txHash, setTxHash] = useState<HexString | null>(null);
   const [showPayGas, setShowPayGas] = useState<boolean>(false);
-  const [use7702, setUse7702] = useState<boolean>(false);
+  const [use7702, setUse7702] = useState<boolean>(true);
+  const [autoSelectCheapest, setAutoSelectCheapest] = useState<boolean>(true);
+  const [bundlerQuotes, setBundlerQuotes] = useState<BundlerQuote[]>([]);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+
+  const addLog = (msg: string) => {
+    const time = new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const id = Math.random().toString(36).substring(2, 9);
+    setLogs((prev) => [{ id, time, msg }, ...prev].slice(0, 50));
+    setStatusMsg(msg);
+  };
 
   const [devWallet, setDevWallet] = useState<ethers.Wallet | null>(null);
 
@@ -230,6 +255,11 @@ export function App() {
   const [bundlerBalances, setBundlerBalances] = useState<Record<string, string>>({});
 
   const sessionId = useMemo(() => getOrCreateSessionId(), []);
+
+  const tokenInAddress = useMemo(() => {
+    if (!deployments) return null;
+    return selectedTokenSymbol === "BNB" ? deployments.bnb : deployments.usdc;
+  }, [deployments, selectedTokenSymbol]);
 
   // tick for quote countdown
   useEffect(() => {
@@ -284,7 +314,7 @@ export function App() {
         const pm = deployments.paymaster;
         const [eth, tIn, tOut] = await Promise.all([
           readProvider.getBalance(pm),
-          new ethers.Contract(deployments.tokenIn, erc20, readProvider).balanceOf(pm),
+          tokenInAddress ? new ethers.Contract(tokenInAddress, erc20, readProvider).balanceOf(pm) : BigNumber.from(0),
           new ethers.Contract(deployments.tokenOut, erc20, readProvider).balanceOf(pm),
         ]);
         setPmBalances({
@@ -314,7 +344,7 @@ export function App() {
     void update();
     const t = setInterval(() => void update(), 5000);
     return () => clearInterval(t);
-  }, [readProvider, deployments, bundlers]);
+  }, [readProvider, deployments, bundlers, tokenInAddress]);
 
   // telemetry heartbeat (users connected)
   useEffect(() => {
@@ -349,7 +379,8 @@ export function App() {
           "function decimals() view returns (uint8)",
           "function symbol() view returns (string)",
         ]);
-        const tokenIn = new ethers.Contract(deployments.tokenIn, erc20, readProvider);
+        if (!tokenInAddress) return;
+        const tokenIn = new ethers.Contract(tokenInAddress, erc20, readProvider);
         const tokenOut = new ethers.Contract(deployments.tokenOut, erc20, readProvider);
         const [dIn, sIn, dOut, sOut] = await Promise.all([
           tokenIn.decimals(),
@@ -365,7 +396,7 @@ export function App() {
         // ignore (demo)
       }
     })();
-  }, [readProvider, deployments]);
+  }, [readProvider, deployments, tokenInAddress]);
 
   const selectedBundler = bundlers.find((b) => b.id === selectedBundlerId) ?? null;
   const quoteExpired = quote ? quote.expiresAt <= quoteNowSec : false;
@@ -373,11 +404,11 @@ export function App() {
 
   async function connect(): Promise<void> {
     if (!readProvider || !deployments) {
-      setStatusMsg("Missing VITE_RPC_URL or deployments; start monitor + set env vars.");
+      addLog("Missing VITE_RPC_URL or deployments.");
       return;
     }
 
-    setStatusMsg("");
+    addLog("Connecting wallet…");
     setStep("connecting");
 
     if (devPrivateKey) {
@@ -395,15 +426,17 @@ export function App() {
           ["function getAddress(address owner,uint256 salt) view returns (address)"],
           readProvider,
         );
-        setSender((await factory.getAddress(addr, 0)) as HexString);
+        const counterfactual = await factory.getAddress(addr, 0);
+        setSender(counterfactual as HexString);
 
         setDevWallet(w);
         setStep("idle");
+        addLog(`Connected Dev Wallet: ${shortAddr(addr)}`);
         return;
       } catch (e: any) {
         setDevWallet(null);
         setStep("idle");
-        setStatusMsg(e?.message ?? "Dev wallet connect failed");
+        addLog(`Dev wallet connect failed: ${e?.message}`);
         return;
       }
     }
@@ -411,7 +444,7 @@ export function App() {
     if (!window.ethereum) {
       setDevWallet(null);
       setStep("idle");
-      setStatusMsg("MetaMask not detected (window.ethereum missing).");
+      addLog("MetaMask not detected.");
       return;
     }
 
@@ -439,6 +472,7 @@ export function App() {
     }
 
     setStep("idle");
+    addLog(`Connected Wallet: ${shortAddr(addr)}`);
   }
 
   // Update sender when use7702 changes if already connected
@@ -460,27 +494,29 @@ export function App() {
   }, [use7702, owner, deployments, readProvider]);
 
   async function getQuote(): Promise<void> {
-    if (!quoteServiceUrl) return setStatusMsg("Missing VITE_QUOTE_SERVICE_URL");
-    if (!deployments) return setStatusMsg("Missing deployments");
-    if (!sender) return setStatusMsg("Connect wallet first");
+    if (!quoteServiceUrl) return addLog("Missing VITE_QUOTE_SERVICE_URL");
+    if (!deployments) return addLog("Missing deployments");
+    if (!sender) return addLog("Connect wallet first");
+    if (!readProvider) return addLog("Missing RPC provider");
 
-    setStatusMsg("");
+    addLog("Fetching swap quote…");
     setStep("quoting");
     setUserOpHash(null);
     setTxHash(null);
     setShowPayGas(false);
+    setBundlerQuotes([]);
 
-    const amountIn = parseUnitsSafe(amountInUi, tokenInDecimals);
-    if (!amountIn || amountIn.lte(0)) {
+    const amountInParsed = parseUnitsSafe(amountInUi, tokenInDecimals);
+    if (!amountInParsed || amountInParsed.lte(0)) {
       setStep("idle");
-      return setStatusMsg("Enter a valid amount");
+      return addLog("Enter a valid amount");
     }
 
     const req: QuoteRequest = {
       chainId: chainId ?? undefined,
-      tokenIn: deployments.tokenIn,
+      tokenIn: tokenInAddress!,
       tokenOut: deployments.tokenOut,
-      amountIn: amountIn.toString(),
+      amountIn: amountInParsed.toString(),
       slippageBps,
       sender,
     };
@@ -488,20 +524,143 @@ export function App() {
     try {
       const q = await fetchQuote(quoteServiceUrl, req);
       setQuote(q);
+
+      addLog(`Swap quote received: ${formatUnitsSafe(q.amountOut, tokenOutDecimals)} ${tokenOutSymbol}`);
+
+      // Multi-bundler estimation
+      const candidates = bundlers.filter((b) => Boolean(b.rpcUrl) && b.status === "UP");
+      if (candidates.length === 0) {
+        addLog("No healthy bundlers available for estimation.");
+        setStep("idle");
+        return;
+      }
+
+      addLog(`Estimating fees for ${candidates.length} bundlers…`);
+
+      const paymasterIface = new ethers.utils.Interface([
+        "function gasBufferBps() view returns (uint256)",
+        "function fixedMarkupWei() view returns (uint256)",
+      ]);
+      const paymaster = new ethers.Contract(deployments.paymaster, paymasterIface, readProvider);
+      const [gasBufferBps, fixedMarkupWei] = await Promise.all([paymaster.gasBufferBps(), paymaster.fixedMarkupWei()]);
+
+      const feeData = await readProvider.getFeeData();
+      const prio = BigNumber.from(feeData.maxPriorityFeePerGas ?? feeData.gasPrice ?? ethers.utils.parseUnits("1", "gwei"));
+      const maxFee = BigNumber.from(feeData.maxFeePerGas ?? feeData.gasPrice ?? prio);
+
+      const entryPoint = new ethers.Contract(
+        deployments.entryPoint,
+        ["function getNonce(address sender,uint192 key) view returns (uint256)"],
+        readProvider
+      );
+      const nonce = await entryPoint.getNonce(sender, 0);
+      const senderCode = await readProvider.getCode(sender);
+      const needsDeployment = senderCode === "0x" || senderCode === "0x0";
+      const factoryData = buildFactoryData(owner!, 0);
+
+      const placeholderSig = makeNonRevertingDummySignature();
+      const paymasterVerificationGasLimit = BigNumber.from(200_000);
+      const paymasterPostOpGasLimit = BigNumber.from(200_000);
+
+      const bQuotes: BundlerQuote[] = await Promise.all(candidates.map(async (b) => {
+        try {
+          const minPrio = ethers.utils.parseUnits((b.policy.minPriorityFeeGwei ?? 0).toString(), "gwei");
+          const minMax = ethers.utils.parseUnits((b.policy.minMaxFeeGwei ?? 0).toString(), "gwei");
+          const maxPriorityFeePerGas = prio.gt(minPrio) ? prio : minPrio;
+          const maxFeePerGas = maxFee.gt(minMax) ? maxFee : minMax;
+
+          const gasGuess = { callGas: BigNumber.from(1_500_000), verifGas: BigNumber.from(600_000), preVerifGas: BigNumber.from(120_000) };
+
+          const mkUserOp = (gas: any, fee: BigNumber) => ({
+            sender,
+            nonce: hexBn(nonce),
+            factory: (needsDeployment && !use7702) ? deployments.simpleAccountFactory : undefined,
+            factoryData: (needsDeployment && !use7702) ? factoryData : undefined,
+            callData: buildExecuteBatchCallData({
+              tokenIn: tokenInAddress!,
+              tokenOut: deployments.tokenOut,
+              router: deployments.router,
+              paymaster: deployments.paymaster,
+              amountIn: amountInParsed,
+              feeAmount: fee,
+              routerSwapCalldata: q.route.calldata,
+            }),
+            callGasLimit: hexBn(gas.callGas),
+            verificationGasLimit: hexBn(gas.verifGas),
+            preVerificationGas: hexBn(gas.preVerifGas),
+            maxFeePerGas: hexBn(maxFeePerGas),
+            maxPriorityFeePerGas: hexBn(maxPriorityFeePerGas),
+            paymaster: deployments.paymaster,
+            paymasterVerificationGasLimit: hexBn(paymasterVerificationGasLimit),
+            paymasterPostOpGasLimit: hexBn(paymasterPostOpGasLimit),
+            paymasterData: "0x",
+            signature: placeholderSig,
+          });
+
+          const currentFeeForGas = (gas: any) => {
+            const totalGas = BigNumber.from(gas.callGasLimit || gas.callGas)
+              .add(BigNumber.from(gas.verificationGasLimit || gas.verifGas))
+              .add(BigNumber.from(gas.preVerificationGas || gas.preVerifGas))
+              .add(paymasterVerificationGasLimit)
+              .add(paymasterPostOpGasLimit);
+            const maxCost = totalGas.mul(maxFeePerGas);
+            return maxCost.mul(BigNumber.from(10_000).add(gasBufferBps)).div(10_000).add(fixedMarkupWei).mul(101).div(100);
+          };
+
+          const initialFee = currentFeeForGas(gasGuess);
+          const est = await jsonRpcCall<any>(b.rpcUrl, "eth_estimateUserOperationGas", [
+            buildPackedUserOpV07(mkUserOp(gasGuess, initialFee) as any),
+            deployments.entryPoint
+          ]);
+
+          const finalFee = currentFeeForGas(est);
+          return {
+            bundlerId: b.id,
+            bundlerName: b.name,
+            feeAmount: finalFee.toString(),
+            isAvailable: true
+          };
+        } catch (e: any) {
+          return {
+            bundlerId: b.id,
+            bundlerName: b.name,
+            feeAmount: "0",
+            isAvailable: false,
+            error: formatBundlerRpcError(e?.rpc ?? e)
+          };
+        }
+      }));
+
+      const sorted = bQuotes.sort((a, b) => {
+        if (!a.isAvailable) return 1;
+        if (!b.isAvailable) return -1;
+        return BigNumber.from(a.feeAmount).gt(BigNumber.from(b.feeAmount)) ? 1 : -1;
+      });
+
+      setBundlerQuotes(sorted);
+
+      if (autoSelectCheapest) {
+        const cheapest = sorted.find(s => s.isAvailable);
+        if (cheapest) {
+          setSelectedBundlerId(cheapest.bundlerId);
+          addLog(`Auto-selected ${cheapest.bundlerName} (fee: ${formatUnitsSafe(cheapest.feeAmount, tokenOutDecimals)} ${tokenOutSymbol})`);
+        }
+      }
+
       setStep("idle");
     } catch (e: any) {
       setStep("idle");
-      setStatusMsg(e?.message ?? "Quote failed");
+      addLog(`Quote failed: ${e?.message ?? "Unknown error"}`);
     }
   }
 
   async function gaslessSwap(): Promise<void> {
     try {
-      if (!deployments || !readProvider) return setStatusMsg("Missing deployments/RPC");
-      if (!quoteServiceUrl) return setStatusMsg("Missing VITE_QUOTE_SERVICE_URL");
-      if (!quote) return setStatusMsg("Get a quote first");
-      if (!owner || !sender) return setStatusMsg("Connect wallet first");
-      if (!devWallet && !window.ethereum) return setStatusMsg("MetaMask not detected");
+      if (!deployments || !readProvider) return addLog("Missing deployments/RPC");
+      if (!quoteServiceUrl) return addLog("Missing VITE_QUOTE_SERVICE_URL");
+      if (!quote) return addLog("Get a quote first");
+      if (!owner || !sender) return addLog("Connect wallet first");
+      if (!devWallet && !window.ethereum) return addLog("MetaMask not detected");
 
       const candidates = (() => {
         const list = bundlers.filter((b) => Boolean(b.rpcUrl));
@@ -511,9 +670,9 @@ export function App() {
         return [...(selected ? [selected] : []), ...rest];
       })();
 
-      if (candidates.length === 0) return setStatusMsg("No bundlers available (start bundlers / monitor)");
+      if (candidates.length === 0) return addLog("No bundlers available");
 
-      setStatusMsg("");
+      addLog("Starting gasless swap…");
       setStep("building");
       setUserOpHash(null);
       setTxHash(null);
@@ -524,18 +683,18 @@ export function App() {
       const amountInParsed = parseUnitsSafe(amountInUi, tokenInDecimals);
       if (!amountInParsed || amountInParsed.lte(0)) {
         setStep("idle");
-        return setStatusMsg("Enter a valid amount");
+        return addLog("Enter a valid amount");
       }
 
       // auto rebuild quote if it expired before we asked for a signature
       let activeQuote = quote;
       if (activeQuote.expiresAt <= nowSec()) {
         setStep("quoting");
-        setStatusMsg("Quote expired — rebuilding…");
+        addLog("Quote expired — rebuilding…");
         try {
           activeQuote = await fetchQuote(quoteServiceUrl, {
             chainId: chainId ?? undefined,
-            tokenIn: deployments.tokenIn,
+            tokenIn: tokenInAddress!,
             tokenOut: deployments.tokenOut,
             amountIn: amountInParsed.toString(),
             slippageBps,
@@ -544,7 +703,7 @@ export function App() {
           setQuote(activeQuote);
         } catch (e: any) {
           setStep("idle");
-          return setStatusMsg(e?.message ?? "Quote rebuild failed");
+          return addLog(`Quote rebuild failed: ${e?.message}`);
         }
         setStep("building");
       }
@@ -554,7 +713,8 @@ export function App() {
         [
           ...ENTRYPOINT_ABI,
           "function getNonce(address sender,uint192 key) view returns (uint256)",
-          "function getUserOpHash((address sender,uint256 nonce,bytes initCode,bytes callData,bytes32 accountGasLimits,uint256 preVerificationGas,bytes32 gasFees,bytes paymasterAndData,bytes signature) userOp) view returns (bytes32)",
+          "function getUserOpHash((address,uint256,bytes,bytes,bytes32,uint256,bytes32,bytes,bytes) userOp) view returns (bytes32)",
+          "function version() view returns (string)",
         ],
         readProvider,
       );
@@ -570,7 +730,11 @@ export function App() {
 
       const nonce = await entryPoint.getNonce(sender, 0);
       const senderCode = await readProvider.getCode(sender);
-      const needsDeployment = senderCode === "0x";
+      const needsDeployment = senderCode === "0x" || senderCode === "0x0";
+
+      if (needsDeployment) {
+        console.log("Account needs deployment. Factory address:", deployments.simpleAccountFactory);
+      }
 
       // Fee floors: to support automatic bundler failover with a single signature, we pick floors that satisfy all UP bundlers.
       const floorBundlers = candidates.some((b) => b.status === "UP") ? candidates.filter((b) => b.status === "UP") : candidates;
@@ -600,7 +764,7 @@ export function App() {
         gas: { callGas: BigNumber; verifGas: BigNumber; preVerifGas: BigNumber },
       ): UserOpV07 => {
         const callData = buildExecuteBatchCallData({
-          tokenIn: deployments.tokenIn,
+          tokenIn: tokenInAddress!,
           tokenOut: deployments.tokenOut,
           router: deployments.router,
           paymaster: deployments.paymaster,
@@ -632,12 +796,12 @@ export function App() {
       const estimateWithFailover = async (userOp: UserOpV07): Promise<{ gas: any; bundlerId: string }> => {
         const errors: string[] = [];
         for (const b of candidates) {
-          setStatusMsg(`Estimating via ${b.name}…`);
+          addLog(`Estimating via ${b.name}…`);
           try {
             const result = await jsonRpcCall<{ callGasLimit: string; verificationGasLimit: string; preVerificationGas: string }>(
               b.rpcUrl,
               "eth_estimateUserOperationGas",
-              [userOp, deployments.entryPoint],
+              [buildPackedUserOpV07(userOp), deployments.entryPoint],
             );
             return { gas: result, bundlerId: b.id };
           } catch (e: any) {
@@ -715,9 +879,38 @@ export function App() {
         u1.eip7702Auth = auth;
       }
 
-      // userOpHash is independent of signature, so we can compute it before prompting the user.
+      const epVersion = await entryPoint.version().catch(() => "0.6.0");
+      const isV07 = epVersion.startsWith("0.7");
+
+      const entryPointWithCorrectHashing = isV07 ? entryPoint : new ethers.Contract(
+        deployments.entryPoint,
+        [
+          "function getUserOpHash((address,uint256,bytes,bytes,uint256,uint256,uint256,uint256,uint256,bytes,bytes) userOp) view returns (bytes32)"
+        ],
+        readProvider
+      );
+
+      // final hybrid object
+      const u1 = mkSponsoredUserOp(feeAmount, gas1);
       const packed = buildPackedUserOpV07(u1);
-      const userOpHashBytes: HexString = (await entryPoint.getUserOpHash(packed)) as HexString;
+
+      // For v0.6 hashing, we need to pass the v0.6 struct format. 
+      // ethers will handle mapping the hybrid object fields as long as the keys match the v0.6 names or positions.
+      const hashInput = isV07 ? packed : {
+        sender: packed.sender,
+        nonce: packed.nonce,
+        initCode: packed.initCode,
+        callData: packed.callData,
+        callGasLimit: packed.callGasLimit,
+        verificationGasLimit: packed.verificationGasLimit,
+        preVerificationGas: packed.preVerificationGas,
+        maxFeePerGas: packed.maxFeePerGas,
+        maxPriorityFeePerGas: packed.maxPriorityFeePerGas,
+        paymasterAndData: packed.paymasterAndData,
+        signature: packed.signature
+      };
+
+      const userOpHashBytes: HexString = (await entryPointWithCorrectHashing.getUserOpHash(hashInput)) as HexString;
       setUserOpHash(userOpHashBytes);
 
       setStep("signing");
@@ -733,26 +926,30 @@ export function App() {
       const sendErrors: string[] = [];
       let acceptedBy: string | null = null;
       for (const b of candidates) {
-        setStatusMsg(`Submitting to ${b.name}…`);
+        addLog(`Submitting to ${b.name}…`);
         if (b.id !== selectedBundlerId) setSelectedBundlerId(b.id);
         try {
-          const res = await jsonRpcCall<HexString>(b.rpcUrl, "eth_sendUserOperation", [u1, deployments.entryPoint]);
+          const res = await jsonRpcCall<HexString>(b.rpcUrl, "eth_sendUserOperation", [buildPackedUserOpV07(u1), deployments.entryPoint]);
           // Should equal userOpHashBytes, but trust the chain-computed hash.
           void res;
           acceptedBy = b.id;
+          addLog(`Accepted by ${b.name}! Hash: ${userOpHashBytes}`);
           break;
         } catch (e: any) {
-          sendErrors.push(`${b.name}: ${formatBundlerRpcError(e?.rpc ?? e)}`);
+          const err = formatBundlerRpcError(e?.rpc ?? e);
+          sendErrors.push(`${b.name}: ${err}`);
+          addLog(`Rejected by ${b.name}: ${err}`);
         }
       }
 
       if (!acceptedBy) {
         setStep("failed");
         setShowPayGas(true);
-        return setStatusMsg(`All bundlers rejected the UserOp:\n${sendErrors.join("\n")}`);
+        return addLog(`All bundlers rejected the UserOp:\n${sendErrors.join("\n")}`);
       }
 
       setStep("confirming");
+      addLog("Waiting for inclusion on-chain…");
 
       const topicUserOp = entryPointIface.getEventTopic("UserOperationEvent");
       const topicRevert = entryPointIface.getEventTopic("UserOperationRevertReason");
@@ -769,13 +966,13 @@ export function App() {
         if (nowSec() > activeQuote.deadline) {
           setStep("failed");
           setShowPayGas(true);
-          return setStatusMsg("Quote expired before inclusion. Rebuild quote and retry (requires a new signature).");
+          return addLog("Quote expired before inclusion. Rebuild quote and retry.");
         }
 
         if (Date.now() > nextResendAtMs && resendIndex < resendQueue.length) {
           const b = resendQueue[resendIndex++];
           nextResendAtMs += 10_000;
-          setStatusMsg(`No inclusion yet — resubmitting to ${b.name}…`);
+          addLog(`Still waiting… resubmitting to ${b.name}`);
           setSelectedBundlerId(b.id);
           try {
             await jsonRpcCall<HexString>(b.rpcUrl, "eth_sendUserOperation", [u1, deployments.entryPoint]);
@@ -800,8 +997,8 @@ export function App() {
             setTxHash(tx);
 
             if (success) {
-              setStatusMsg("");
               setStep("success");
+              addLog("Swap success! Transaction confirmed.");
               return;
             }
 
@@ -831,7 +1028,7 @@ export function App() {
 
             setStep("failed");
             setShowPayGas(true);
-            setStatusMsg(reason);
+            addLog(`Swap failed: ${reason}`);
             return;
           }
         } catch {
@@ -841,7 +1038,7 @@ export function App() {
         if (Date.now() - confirmStartMs > 60_000) {
           setStep("failed");
           setShowPayGas(true);
-          setStatusMsg("Timed out waiting for inclusion. Try again or switch bundler.");
+          addLog("Timed out waiting for inclusion.");
           return;
         }
 
@@ -850,25 +1047,25 @@ export function App() {
     } catch (e: any) {
       setStep("failed");
       setShowPayGas(true);
-      setStatusMsg(e?.message ?? "Swap failed");
+      addLog(`Swap failed: ${e?.message}`);
     }
   }
 
   async function paidFallbackSwap(): Promise<void> {
     try {
-      if (!deployments || !readProvider) return setStatusMsg("Missing deployments/RPC");
-      if (!quoteServiceUrl) return setStatusMsg("Missing VITE_QUOTE_SERVICE_URL");
-      if (!quote) return setStatusMsg("Get a quote first");
-      if (!owner) return setStatusMsg("Connect wallet first");
-      if (!devWallet && !window.ethereum) return setStatusMsg("MetaMask not detected");
+      if (!deployments || !readProvider) return addLog("Missing deployments/RPC");
+      if (!quoteServiceUrl) return addLog("Missing VITE_QUOTE_SERVICE_URL");
+      if (!quote) return addLog("Get a quote first");
+      if (!owner) return addLog("Connect wallet first");
+      if (!devWallet && !window.ethereum) return addLog("MetaMask not detected");
 
       const nowSec = () => Math.floor(Date.now() / 1000);
       const amountInParsed = parseUnitsSafe(amountInUi, tokenInDecimals);
       if (!amountInParsed || amountInParsed.lte(0)) {
-        return setStatusMsg("Enter a valid amount");
+        return addLog("Enter a valid amount");
       }
 
-      setStatusMsg("");
+      addLog("Starting user-paid fallback swap…");
       setStep("submitting");
       setUserOpHash(null);
       if (monitorUrl) {
@@ -878,10 +1075,10 @@ export function App() {
       let activeQuote = quote;
       if (activeQuote.expiresAt <= nowSec()) {
         setStep("quoting");
-        setStatusMsg("Quote expired for paid fallback — rebuilding…");
+        addLog("Quote expired — rebuilding…");
         activeQuote = await fetchQuote(quoteServiceUrl, {
           chainId: chainId ?? undefined,
-          tokenIn: deployments.tokenIn,
+          tokenIn: tokenInAddress!,
           tokenOut: deployments.tokenOut,
           amountIn: amountInParsed.toString(),
           slippageBps,
@@ -896,7 +1093,7 @@ export function App() {
       const amountIn = BigNumber.from(activeQuote.amountIn);
 
       const erc20 = new ethers.Contract(
-        deployments.tokenIn,
+        tokenInAddress!,
         [
           "function allowance(address owner,address spender) view returns (uint256)",
           "function approve(address spender,uint256 amount) returns (bool)",
@@ -908,20 +1105,18 @@ export function App() {
       if (BigNumber.from(balance).lt(amountIn)) {
         setStep("failed");
         setShowPayGas(true);
-        return setStatusMsg(
-          `Insufficient ${tokenInSymbol} in owner wallet for paid fallback. Needed ${formatUnitsSafe(amountIn.toString(), tokenInDecimals)}.`,
-        );
+        return addLog(`Insufficient ${tokenInSymbol} balance.`);
       }
 
       const allowance = await erc20.allowance(signerAddr, deployments.router);
       if (BigNumber.from(allowance).lt(amountIn)) {
-        setStatusMsg("Approving token spend for user-paid fallback…");
+        addLog("Approving token spend…");
         const approveTx = await erc20.approve(deployments.router, ethers.constants.MaxUint256);
         await approveTx.wait();
       }
 
       setStep("confirming");
-      setStatusMsg("Submitting user-paid swap…");
+      addLog("Submitting user-paid swap transaction…");
 
       const router = new ethers.Contract(
         deployments.router,
@@ -932,7 +1127,7 @@ export function App() {
       );
 
       const tx = await router.swapExactIn(
-        deployments.tokenIn,
+        tokenInAddress!,
         deployments.tokenOut,
         amountIn,
         BigNumber.from(activeQuote.minOut),
@@ -940,10 +1135,11 @@ export function App() {
         BigNumber.from(activeQuote.deadline),
       );
       setTxHash(tx.hash as HexString);
+      addLog(`Transaction submitted: ${tx.hash}`);
       await tx.wait();
 
       setShowPayGas(false);
-      setStatusMsg("User-paid swap confirmed.");
+      addLog("User-paid swap success!");
       setStep("success");
       if (monitorUrl) {
         void postTelemetryEvent(monitorUrl, "paid_fallback_success").catch(() => { });
@@ -951,7 +1147,7 @@ export function App() {
     } catch (e: any) {
       setStep("failed");
       setShowPayGas(true);
-      setStatusMsg(e?.message ?? "User-paid fallback swap failed");
+      addLog(`User-paid swap failed: ${e?.message}`);
       if (monitorUrl) {
         void postTelemetryEvent(monitorUrl, "paid_fallback_failure").catch(() => { });
       }
@@ -967,6 +1163,26 @@ export function App() {
             {quoteExpired ? "Quote expired" : `Expires in ${quoteCountdown}`}
           </span>
         )}
+      </div>
+
+      <div className="label">Token to Swap</div>
+      <div className="row" style={{ gap: 8, marginBottom: 12 }}>
+        <button
+          className={selectedTokenSymbol === "USDC" ? "good" : ""}
+          style={{ flex: 1, padding: "6px" }}
+          onClick={() => { setSelectedTokenSymbol("USDC"); setQuote(null); }}
+          disabled={step !== "idle" && step !== "success" && step !== "failed"}
+        >
+          USDC
+        </button>
+        <button
+          className={selectedTokenSymbol === "BNB" ? "good" : ""}
+          style={{ flex: 1, padding: "6px" }}
+          onClick={() => { setSelectedTokenSymbol("BNB"); setQuote(null); }}
+          disabled={step !== "idle" && step !== "success" && step !== "failed"}
+        >
+          BNB
+        </button>
       </div>
 
       <div className="label">Amount ({tokenInSymbol})</div>
@@ -991,14 +1207,31 @@ export function App() {
 
       <div style={{ height: 10 }} />
 
-      <div className="label">Bundler</div>
-      <select value={selectedBundlerId} onChange={(e) => setSelectedBundlerId(e.target.value)}>
-        {bundlers.map((b) => (
-          <option key={b.id} value={b.id}>
-            {b.name} — {b.policy.strict ? "Strict" : "Fast"} — minPrio {b.policy.minPriorityFeeGwei ?? 0} gwei
-          </option>
-        ))}
-      </select>
+      <div className="label">Bundler Selection</div>
+      <div className="switch-row">
+        <span className="switch-label">Auto-select cheapest bundler</span>
+        <button
+          className={autoSelectCheapest ? "good" : ""}
+          style={{ width: "auto", padding: "4px 12px" }}
+          onClick={() => setAutoSelectCheapest(!autoSelectCheapest)}
+          disabled={step !== "idle" && step !== "success" && step !== "failed"}
+        >
+          {autoSelectCheapest ? "ON" : "OFF"}
+        </button>
+      </div>
+
+      {!autoSelectCheapest && (
+        <>
+          <div className="label">Select Bundler</div>
+          <select value={selectedBundlerId} onChange={(e) => setSelectedBundlerId(e.target.value)}>
+            {bundlers.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name} — {b.policy.strict ? "Strict" : "Fast"}
+              </option>
+            ))}
+          </select>
+        </>
+      )}
 
       <div style={{ height: 12 }} />
 
@@ -1037,9 +1270,24 @@ export function App() {
         );
       })()}
 
-      {statusMsg && (
-        <div style={{ marginTop: 10 }} className="mono">
-          {statusMsg}
+      {quote && bundlerQuotes.length > 0 && (
+        <div style={{ marginTop: 12 }}>
+          <div className="label">Estimated Fees per Bundler</div>
+          <div style={{ background: "rgba(255,255,255,0.03)", padding: "8px", borderRadius: "8px" }}>
+            {bundlerQuotes.map((bq) => (
+              <div key={bq.bundlerId} className="bundler-quote-row">
+                <span className="mono" style={{ opacity: bq.isAvailable ? 1 : 0.5 }}>
+                  {bq.bundlerName}
+                </span>
+                <span className="mono">
+                  {bq.isAvailable
+                    ? `${formatUnitsSafe(bq.feeAmount, tokenOutDecimals)} ${tokenOutSymbol}`
+                    : <span style={{ color: "rgba(255,92,122,0.8)" }}>Error</span>
+                  }
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -1134,7 +1382,7 @@ export function App() {
 
       <div className="label">Paymaster (<AddressDisplay address={deployments?.paymaster ?? "0x..."} />)</div>
       <div className="row space mono" style={{ fontSize: "0.85em" }}>
-        <span>{tokenInSymbol}:</span>
+        <span>{selectedTokenSymbol}:</span>
         <span>{formatUnitsSafe(pmBalances.tokenIn, tokenInDecimals)}</span>
       </div>
       <div className="row space mono" style={{ fontSize: "0.85em" }}>
@@ -1172,7 +1420,19 @@ export function App() {
       <div className="content">
         {quotePanel}
         {statusPanel}
-        {systemPanel}
+        <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+          {systemPanel}
+          <div className="log-panel" id="log-panel">
+            <div className="label" style={{ marginBottom: 8, color: "rgba(255,255,255,0.4)" }}>Activity Logs</div>
+            {logs.length === 0 && <div style={{ opacity: 0.3, fontStyle: "italic" }}>No activity yet.</div>}
+            {logs.map((log) => (
+              <div key={log.id} className="log-entry">
+                <span className="log-time">[{log.time}]</span>
+                <span className="log-msg">{log.msg}</span>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
       <div style={{ padding: "0 18px 18px 18px" }} className="mono">
         {monitorUrl && quoteServiceUrl && rpcUrl ? (

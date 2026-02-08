@@ -13,6 +13,11 @@ QUOTE_URL="http://127.0.0.1:3001"
 WEB_URL="http://127.0.0.1:5173"
 ADMIN_WEB_URL="http://127.0.0.1:5174"
 EXPLORER_URL="http://127.0.0.1:5175"
+WEB_URL="http://127.0.0.1:5173"
+ADMIN_WEB_URL="http://127.0.0.1:5174"
+EXPLORER_URL="http://127.0.0.1:5175"
+ORACLE_URL="http://127.0.0.1:3003"
+ORACLE_WEB_URL="http://127.0.0.1:5176"
 
 ANVIL_MNEMONIC="test test test test test test test test test test test junk"
 DEPLOYER_PRIVATE_KEY="0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
@@ -120,7 +125,7 @@ else
   wait_for_rpc 20
 fi
 
-for port in 3001 3002 5173 5174 5175; do
+for port in 3001 3002 3003 5173 5174 5175 5176; do
   if is_port_listening "${port}"; then
     printf '[dev-up] Port %s is already in use. Stop the process and rerun.\n' "${port}" >&2
     exit 1
@@ -139,12 +144,12 @@ log "Building shared bundler engine"
 start_process \
   "monitor" \
   "cd '${ROOT_DIR}/paymaster_monitor/server' && exec env RPC_URL='${RPC_URL_LOCAL}' DEPLOYMENTS_PATH='../../paymaster/deployments/local/addresses.json' ADMIN_TOKEN='${ADMIN_TOKEN}' DATA_DIR='${DATA_DIR}/monitor' BUNDLER_PRIVATE_KEY='${DEPLOYER_PRIVATE_KEY}' BUNDLER_PORT_RANGE='3100-3199' npm run dev"
-wait_for_http "${MONITOR_URL}/api/public/health" 20
+wait_for_http "${MONITOR_URL}/api/public/health" 60
 
 start_process \
   "quote_service" \
   "cd '${ROOT_DIR}/quote_service' && exec env RPC_URL='${RPC_URL_LOCAL}' DEPLOYMENTS_PATH='../paymaster/deployments/local/addresses.json' DATA_DIR='${DATA_DIR}/quote' LOG_INGEST_URL='${MONITOR_URL}/api/logs/ingest' npm run dev"
-wait_for_http "${QUOTE_URL}/health" 20
+wait_for_http "${QUOTE_URL}/health" 60
 
 start_process \
   "web" \
@@ -160,6 +165,16 @@ start_process \
   "explorer" \
   "cd '${ROOT_DIR}/explorer' && exec env VITE_RPC_URL='${RPC_URL_LOCAL}' npm run dev -- --host 127.0.0.1 --port 5175"
 wait_for_http "${EXPLORER_URL}" 30
+
+start_process \
+  "oracle_service" \
+  "cd '${ROOT_DIR}/oracle_service/server' && exec env PORT=3003 DEPLOYMENTS_PATH='../../paymaster/deployments/local/addresses.json' DEPLOYER_PRIVATE_KEY='${DEPLOYER_PRIVATE_KEY}' npm run dev"
+wait_for_http "${ORACLE_URL}/status" 60
+
+start_process \
+  "oracle_web" \
+  "cd '${ROOT_DIR}/oracle_service/web' && exec env npm run dev -- --host 127.0.0.1 --port 5176"
+wait_for_http "${ORACLE_WEB_URL}" 30
 
 log "Spawning bundler1 and bundler2 via monitor admin API"
 curl -fsS -X POST "${MONITOR_URL}/api/admin/bundlers/spawn" \
@@ -181,4 +196,5 @@ log "Monitor:    ${MONITOR_URL}"
 log "Quote API:  ${QUOTE_URL}"
 log "Logs dir:   ${LOG_DIR}"
 log "Explorer:   ${EXPLORER_URL}"
+log "Oracle Service: ${ORACLE_URL} (backend) / ${ORACLE_WEB_URL} (frontend)"
 log "Stop all:   ${ROOT_DIR}/scripts/dev-down.sh"

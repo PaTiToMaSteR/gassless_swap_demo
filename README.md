@@ -20,7 +20,10 @@ The goal is to ship a working local demo where a user can **swap tokens with 0 E
 - `bundler1/` — ERC‑4337 bundler simulator #1 (strict)
 - `bundler2/` — ERC‑4337 bundler simulator #2 (fast/lenient)
 - `paymaster/` — Solidity + local chain tooling (EntryPoint, Smart Account, Paymaster, Router/Pool, Tokens)
+- `paymaster/` — Solidity + local chain tooling (EntryPoint, Smart Account, Paymaster, Router/Pool, Tokens)
 - `paymaster_monitor/` — **Admin + Monitoring** (backend + frontend) for paymaster/bundlers/users/logs
+- `oracle_service/` — **Oracle Service** (backend + frontend) updates on-chain prices
+- `explorer/` — **Block Explorer** for local dev chain
 
 ## System Overview (at a glance)
 
@@ -31,7 +34,9 @@ The goal is to ship a working local demo where a user can **swap tokens with 0 E
 5. Bundler submits `EntryPoint.handleOps()`.
 6. **Paymaster validates sponsorship on‑chain** (router/tokens/expiry/slippage/fee>=gas-buffer, limits).
 7. Smart Account executes: `approve/permit` → `swap` → `fee transfer`.
+7. Smart Account executes: `approve/permit` → `swap` → `fee transfer`.
 8. `paymaster_monitor/` indexes on‑chain events + backend logs and shows metrics in an admin panel.
+9. `oracle_service/` fetches external prices and updates the `MockPriceOracle`.
 
 ## Target chain (research-backed default)
 
@@ -58,26 +63,27 @@ Local-first dev chain:
 
 Nothing is “implementation-final” until we agree on the specs in these docs.
 
-## One-command local startup
-
-For local demos on Anvil, use the orchestration scripts:
-
-```bash
-./scripts/dev-up.sh
-```
-
-What it does:
-
-1) starts Anvil (or reuses local RPC on `127.0.0.1:8545`)
-2) deploys contracts and exports ABIs
-3) starts monitor backend, quote service, user web, and admin web
-4) spawns `bundler1` and `bundler2` through the monitor admin API
-
-Stop all managed processes:
+## One-command local startup (PM2)
+We use `pm2` to manage all services (Anvil, Backend, Frontend) without Docker.
 
 ```bash
-./scripts/dev-down.sh
+# Install dependencies
+npm install
+
+# Start the stack
+npm run dev:pm2
 ```
+
+This will:
+1. Start Anvil (local chain).
+2. Deploy contracts.
+3. Start all backend and frontend services.
+4. Spawn bundlers.
+
+Manage the stack:
+- **Status**: `npx pm2 status`
+- **Logs**: `npx pm2 logs`
+- **Stop**: `npx pm2 stop all`
 
 Logs + pid files are written under `output/local-dev/`.
 

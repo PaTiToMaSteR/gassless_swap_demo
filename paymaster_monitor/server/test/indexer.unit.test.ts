@@ -23,6 +23,7 @@ describe("paymaster_monitor/server on-chain indexer (file-based)", () => {
 
     const entryIface = new ethers.utils.Interface([
       "event UserOperationEvent(bytes32 indexed userOpHash,address indexed sender,address indexed paymaster,uint256 nonce,bool success,uint256 actualGasCost,uint256 actualGasUsed)",
+      "event UserOperationRevertReason(bytes32 indexed userOpHash, address indexed sender, uint256 nonce, bytes revertReason)",
     ]);
     const paymasterIface = new ethers.utils.Interface([
       "event PostOpHandled(address indexed sender,bytes32 indexed userOpHash,uint8 mode,uint256 actualGasCostWei,uint256 actualUserOpFeePerGas,uint256 feeAmount)",

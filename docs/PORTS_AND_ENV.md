@@ -19,6 +19,8 @@ This doc is the canonical reference for **default ports**, **URLs**, and **env v
 | Bundler #1 | `http://127.0.0.1:3003/rpc` | 3003 | `bundler/` engine + `bundler1/` config |
 | Bundler #2 | `http://127.0.0.1:3004/rpc` | 3004 | `bundler/` engine + `bundler2/` config |
 | Explorer app | `http://127.0.0.1:5175` | 5175 | `explorer/` (Vite) |
+| Oracle backend | `http://127.0.0.1:3003` | 3003 | `oracle_service/server` (Node) |
+| Oracle frontend | `http://127.0.0.1:5176` | 5176 | `oracle_service/web` (Vite) |
 
 
 ## Environment variables by component

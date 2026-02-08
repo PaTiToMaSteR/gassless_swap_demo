@@ -7,6 +7,7 @@ import "account-abstraction/core/Helpers.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import "./demo/DemoRouter.sol";
+import "./demo/MockPriceOracle.sol";
 
 /**
  * @title GaslessSwapPaymaster
@@ -48,6 +49,7 @@ contract GaslessSwapPaymaster is BasePaymaster {
 
     // Immutable state variables set during deployment
     DemoRouter public immutable router; // Router used for the swap
+    MockPriceOracle public immutable oracle; // Oracle for price verification
     address public immutable tokenIn; // Token the user pays with
     address public immutable tokenOut; // Token the paymaster receives (assumed 1:1 with native gas)
 
@@ -77,10 +79,12 @@ contract GaslessSwapPaymaster is BasePaymaster {
     constructor(
         IEntryPoint entryPoint_,
         DemoRouter router_,
+        MockPriceOracle oracle_,
         address tokenIn_,
         address tokenOut_
     ) BasePaymaster(entryPoint_) {
         router = router_;
+        oracle = oracle_;
         tokenIn = tokenIn_;
         tokenOut = tokenOut_;
     }
@@ -159,6 +163,19 @@ contract GaslessSwapPaymaster is BasePaymaster {
         );
         if (expectedOut < minOut) {
             revert SlippageRisk(expectedOut, minOut);
+        }
+
+        // Oracle price check: ensure the fee offered is not significantly below the oracle price
+        // requiredFeeOracle = (maxCostWei * (1 / oraclePrice)) ... basically we check if feeAmount in tokenOut
+        // is enough to cover maxCost in Wei. Since tokenOut is 1:1 with Wei, we just compare.
+        // But for tokenIn, we'd need oracle.getPrice(tokenIn).
+        // For the demo, we'll verify the swapAmountIn provides enough tokenOut according to the oracle.
+        uint256 oraclePriceInWei = oracle.getPrice(tokenIn);
+        uint256 fairOut = (swapAmountIn * oraclePriceInWei) /
+            (10 ** oracle.decimals(tokenIn));
+        if (minOut < (fairOut * 95) / 100) {
+            // allow 5% deviation from oracle
+            revert SlippageRisk(fairOut, minOut);
         }
 
         // Time constraints: set op validity based on call deadline and sender cooldown

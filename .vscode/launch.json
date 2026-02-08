@@ -120,6 +120,12 @@
       "type": "node-terminal",
       "request": "launch",
       "command": "cd ${workspaceFolder} && node scripts/soak-report-latest.mjs"
+    },
+    {
+      "name": "test: stress (auto stack)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "cd ${workspaceFolder} && STRESS_DURATION=60 ./scripts/stress-test.sh"
     }
   ],
   "compounds": [

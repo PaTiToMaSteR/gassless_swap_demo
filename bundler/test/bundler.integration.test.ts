@@ -186,27 +186,27 @@ describe("bundler v0.7 integration (anvil)", () => {
 
     const factory = new ethers.Contract(addresses.simpleAccountFactory, factoryAbi, provider);
     const entryPoint = new ethers.Contract(addresses.entryPoint, entryPointAbi, provider);
-    const tokenIn = new ethers.Contract(addresses.tokenIn, tokenAbi, deployer);
+    const tokenIn = new ethers.Contract(addresses.usdc, tokenAbi, deployer);
     const router = new ethers.Contract(addresses.router, routerAbi, provider);
 
     const salt = 0;
     const sender: string = await factory.getAddress(owner.address, salt);
 
     const amountIn = ethers.BigNumber.from("1000000000"); // 1000e6
-    const expectedOut = await router.quoteExactIn(addresses.tokenIn, addresses.tokenOut, amountIn);
-    const minOut = expectedOut.mul(9950).div(10000);
+    const expectedOut = await router.quoteExactIn(addresses.usdc, addresses.tokenOut, amountIn);
+    const minOut = expectedOut.mul(9900).div(10000); // 99% slippage
     const feeAmount = ethers.utils.parseEther("0.01");
     expect(minOut.gte(feeAmount)).toBe(true);
 
     // fund counterfactual smart account with tokenIn
     await (await tokenIn.mint(sender, amountIn)).wait();
 
-    const targets = [addresses.tokenIn, addresses.router, addresses.tokenOut];
+    const targets = [addresses.usdc, addresses.router, addresses.tokenOut];
     const values = [0, 0, 0];
     const datas = [
       new ethers.utils.Interface(tokenAbi).encodeFunctionData("approve", [addresses.router, amountIn]),
       new ethers.utils.Interface(routerAbi).encodeFunctionData("swapExactIn", [
-        addresses.tokenIn,
+        addresses.usdc,
         addresses.tokenOut,
         amountIn,
         minOut,
@@ -329,6 +329,7 @@ describe("bundler v0.7 integration (anvil)", () => {
       simpleAccountFactory: string;
       paymaster: string;
       router: string;
+      oracle: string;
       tokenIn: string;
       tokenOut: string;
     };
@@ -347,6 +348,7 @@ describe("bundler v0.7 integration (anvil)", () => {
 
     const factory = new ethers.Contract(addresses.simpleAccountFactory, factoryAbi, deployer);
     const entryPoint = new ethers.Contract(addresses.entryPoint, entryPointAbi, provider);
+    const oracle = new ethers.Contract(addresses.oracle, ["function getPrice(address) view returns (uint256)", "function decimals(address) view returns (uint8)"], provider);
 
     const salt = 0;
     const sender: string = await factory.getAddress(owner.address, salt);
@@ -360,15 +362,22 @@ describe("bundler v0.7 integration (anvil)", () => {
     const nonce = await entryPoint.getNonce(sender, 0);
 
     const amountIn = ethers.BigNumber.from("1000000000"); // 1000e6
-    const minOut = ethers.constants.Zero;
+
+    // Calculate fairOut based on Oracle price to satisfy Paymaster's SlippageRisk check
+    const oraclePrice = await oracle.getPrice(addresses.usdc);
+    const tokenDecimals = await oracle.decimals(addresses.usdc); // Should be 6
+    const fairOut = amountIn.mul(oraclePrice).div(ethers.BigNumber.from(10).pow(tokenDecimals));
+    // Set minOut to 96% of fairOut (Paymaster requires >95%)
+    const minOut = fairOut.mul(96).div(100);
+
     const feeAmount = ethers.constants.Zero;
 
-    const targets = [addresses.tokenIn, addresses.router, addresses.tokenOut];
+    const targets = [addresses.usdc, addresses.router, addresses.tokenOut];
     const values = [0, 0, 0];
     const datas = [
       new ethers.utils.Interface(tokenAbi).encodeFunctionData("approve", [addresses.router, amountIn]),
       new ethers.utils.Interface(routerAbi).encodeFunctionData("swapExactIn", [
-        addresses.tokenIn,
+        addresses.usdc,
         addresses.tokenOut,
         amountIn,
         minOut,
@@ -420,6 +429,8 @@ describe("bundler v0.7 integration (anvil)", () => {
     }).then((r) => r.json());
 
     if (estimateRes?.error) {
+      console.error("Estimate Error Detail:", JSON.stringify(estimateRes.error, null, 2));
+      fs.writeFileSync("bundler_error.json", JSON.stringify(estimateRes.error, null, 2));
       throw new Error(`eth_estimateUserOperationGas failed: ${JSON.stringify(estimateRes.error)}`);
     }
 

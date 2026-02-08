@@ -34,6 +34,44 @@ This project provides a toggle to use EIP-7702, allowing a user to authorize a p
 
 ---
 
+
+## 3. Price Oracle: Native vs. Chainlink
+
+### Implemented: Custom Light Oracle
+We built a lightweight `oracle_service` that fetches prices from CoinGecko and pushes them to a local `MockPriceOracle`.
+
+**Rationale**:
+- **Zero Config**: No need to fork mainnet state or configure Chainlink nodes locally.
+- **Control**: We can manually force price updates to test slippage and paymaster limits instantly.
+- **Speed**: Updates are pushed every 10 seconds locally, faster than mainnet heartbeats.
+
+### Alternative: Chainlink Data Feeds
+In production on Fuji/Mainnet, we would likely use Chainlink Price Feeds.
+
+**Pros**:
+- **Decentralization**: No single point of failure for price data.
+- **Security**: Sybil-resistant and widely battle-tested.
+- **Standard**: Easy integration with `AggregatorV3Interface`.
+
+**Cons (Local Dev)**:
+- Requires forking a network with active feeds (e.g., Anvil forking Avalanche C-Chain).
+- Harder to "mock" specific price scenarios (e.g., sudden -50% flash crash) for testing solvency logic.
+
+---
+
+---
+
+## 4. Process Management (No Docker)
+
+### PM2 (Recommended)
+Instead of Docker or raw `nohup` scripts, we use [PM2](https://pm2.keymetrics.io/) to manage the 6+ microservices.
+- **Why**: Keeps processes alive, aggregates logs, and avoids "zombie" processes.
+- **Config**: Defined in `ecosystem.config.js`.
+- **Usage**: Managed via `npm run dev:pm2`.
+
+### Docker (Forbidden)
+Docker was considered but rejected due to local constraints.
+
 ## Conclusion
 
 This project focuses on **ERC-4337** as it provides the most robust, decentralized, and standard-compliant way to handle complex batching and sponsorship logic. However, the alternatives above remain relevant for specific legacy or EOA-native optimizations.

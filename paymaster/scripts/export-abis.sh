@@ -7,6 +7,7 @@ OUTDIR="deployments/${NETWORK}/abis"
 mkdir -p "$OUTDIR"
 
 forge inspect GaslessSwapPaymaster abi --json > "${OUTDIR}/GaslessSwapPaymaster.abi.json"
+forge inspect MockPriceOracle abi --json > "${OUTDIR}/MockPriceOracle.abi.json"
 forge inspect DemoRouter abi --json > "${OUTDIR}/DemoRouter.abi.json"
 forge inspect DemoPool abi --json > "${OUTDIR}/DemoPool.abi.json"
 forge inspect TestERC20 abi --json > "${OUTDIR}/TestERC20.abi.json"

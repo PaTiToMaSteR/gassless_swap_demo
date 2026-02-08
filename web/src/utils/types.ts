@@ -24,8 +24,12 @@ export type Deployments = {
   simpleAccountFactory: HexString;
   paymaster: HexString;
   router: HexString;
-  tokenIn: HexString;
+  oracle: HexString;
   tokenOut: HexString;
+  usdc: HexString;
+  bnb: HexString;
+  usdcPool: HexString;
+  bnbPool: HexString;
 };
 
 export type QuoteRequest = {

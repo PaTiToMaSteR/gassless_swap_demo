@@ -56,6 +56,7 @@ function coerceEntryPointEvent(raw: unknown): EntryPointUserOperationEvent | nul
     actualGasCostWei: raw.actualGasCostWei,
     actualGasUsed: raw.actualGasUsed,
     bundler: typeof raw.bundler === "string" ? (raw.bundler as any) : undefined,
+    revertReason: typeof raw.revertReason === "string" ? raw.revertReason : undefined,
   };
 }
 
@@ -347,12 +348,33 @@ export class OnChainIndexer {
       toBlock,
     });
 
+    const revertTopic0 = this.cfg.entryPointInterface.getEventTopic("UserOperationRevertReason");
+    const revertLogs = await this.cfg.provider.getLogs({
+      address: this.cfg.entryPoint,
+      topics: [revertTopic0],
+      fromBlock,
+      toBlock,
+    });
+
+    const revertMap = new Map<string, string>();
+    for (const l of revertLogs) {
+      try {
+        const parsed = this.cfg.entryPointInterface.parseLog(l);
+        const reason = String(parsed.args.revertReason ?? "0x");
+        // For common error codes like AA21, they are usually packed in the revert data.
+        // We'll just store the raw or decoded string for now.
+        revertMap.set((parsed.args.userOpHash as string).toLowerCase(), reason);
+      } catch { /* ignore */ }
+    }
+
     const entryEvents: EntryPointUserOperationEvent[] = [];
     for (const l of entryLogs) {
       try {
         const parsed = this.cfg.entryPointInterface.parseLog(l);
         const ts = await this._blockTimestamp(l.blockNumber);
         const bundler = await this._txFrom(l.transactionHash);
+        const opHash = (parsed.args.userOpHash as string).toLowerCase();
+
         entryEvents.push({
           ts,
           chainId: this.chainId,
@@ -367,6 +389,7 @@ export class OnChainIndexer {
           actualGasCostWei: ethers.BigNumber.from(parsed.args.actualGasCost).toString(),
           actualGasUsed: ethers.BigNumber.from(parsed.args.actualGasUsed).toString(),
           bundler: bundler ? (bundler as any) : undefined,
+          revertReason: revertMap.get(opHash),
         });
       } catch { /* ignore */ }
     }

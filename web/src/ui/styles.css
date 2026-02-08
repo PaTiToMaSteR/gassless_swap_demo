@@ -89,6 +89,7 @@ a {
   gap: 10px;
   align-items: center;
 }
+
 .row.space {
   justify-content: space-between;
 }
@@ -124,10 +125,12 @@ button {
   color: var(--text);
   cursor: pointer;
 }
+
 button.primary {
   background: linear-gradient(180deg, rgba(106, 169, 255, 0.28), rgba(106, 169, 255, 0.16));
   border-color: rgba(106, 169, 255, 0.35);
 }
+
 button:disabled {
   opacity: 0.55;
   cursor: not-allowed;
@@ -140,14 +143,17 @@ button:disabled {
   border-radius: 999px;
   color: var(--muted);
 }
+
 .pill.good {
   border-color: rgba(43, 213, 118, 0.35);
   color: rgba(43, 213, 118, 0.9);
 }
+
 .pill.warn {
   border-color: rgba(255, 204, 102, 0.35);
   color: rgba(255, 204, 102, 0.9);
 }
+
 .pill.bad {
   border-color: rgba(255, 92, 122, 0.35);
   color: rgba(255, 92, 122, 0.9);
@@ -163,6 +169,7 @@ button:disabled {
   display: grid;
   gap: 8px;
 }
+
 .step {
   display: flex;
   align-items: center;
@@ -172,15 +179,80 @@ button:disabled {
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(255, 255, 255, 0.03);
 }
+
 .step .name {
   font-size: 13px;
   color: var(--muted);
 }
+
 .step .state {
   font-size: 12px;
   color: var(--faint);
 }
+
 .step.active {
   border-color: rgba(106, 169, 255, 0.35);
   background: rgba(106, 169, 255, 0.08);
+}
+
+.log-panel {
+  margin-top: 18px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 12px;
+  max-height: 200px;
+  overflow-y: auto;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.4;
+  color: #ccc;
+  display: flex;
+  flex-direction: column;
+}
+
+.log-entry {
+  margin-bottom: 4px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.log-entry:last-child {
+  border-bottom: none;
+}
+
+.log-time {
+  color: #666;
+  margin-right: 8px;
+}
+
+.log-msg {
+  word-break: break-all;
+}
+
+.switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 8px 12px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.switch-label {
+  font-size: 0.9em;
+  font-weight: 500;
+}
+
+.bundler-quote-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.bundler-quote-row:last-child {
+  border-bottom: none;
 }

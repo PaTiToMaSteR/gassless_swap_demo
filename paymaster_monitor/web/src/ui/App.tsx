@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { BundlerInstance, LogEvent, MetricsSummary, PaymasterStatus, UserOpSummary, UsersResponse } from "../utils/types";
 import { fetchBundlers, fetchPaymasterStatus, fetchSummary, fetchTimeseries, fetchUserOps, fetchUsers, queryLogs, registerBundler, spawnBundler, stopBundler, unregisterBundler } from "../utils/api";
 import { getOrCreateAdminSessionId, getStoredAdminToken, storeAdminToken } from "../utils/session";
+import { FailuresChart } from "./FailuresChart";
 
 type Page = "dashboard" | "bundlers" | "paymaster" | "users" | "ops" | "logs";
 
@@ -280,8 +281,8 @@ export function App() {
   }
 
   const dashboard = (
-    <div style={{ display: "grid", gap: 12 }}>
-      <div className="panel">
+    <div className="stack">
+      <div className="panel stack">
         <div className="row space">
           <h2 className="h1">Dashboard</h2>
           <span className={`pill ${summary?.bundlersUp ? "good" : "warn"}`}>{summary ? `${summary.bundlersUp}/${summary.bundlersTotal} bundlers up` : "—"}</span>
@@ -300,6 +301,11 @@ export function App() {
             <div className="label">Logs retained</div>
             <div className="value">{summary ? String(summary.logsCount) : "—"}</div>
           </div>
+        </div>
+
+        <FailuresChart monitorUrl={monitorUrl} adminToken={adminToken} />
+
+        <div className="kpis">
           <div className="kpi">
             <div className="label">UserOps (total)</div>
             <div className="value">{summary?.userOps ? String(summary.userOps.total) : "—"}</div>
@@ -316,8 +322,9 @@ export function App() {
           </div>
         </div>
 
-        <div style={{ height: 12 }} />
-        <div className="mono">monitor: {monitorUrl} • session: {sessionId}</div>
+        <div className="mono" style={{ opacity: 0.6 }}>
+          monitor: {monitorUrl} • session: {sessionId}
+        </div>
       </div>
 
       <div className="panel">

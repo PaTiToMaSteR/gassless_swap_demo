@@ -6,9 +6,12 @@ export type PaymasterDeployments = {
   simpleAccountFactory: string;
   paymaster: string;
   router: string;
-  pool?: string;
-  tokenIn: string;
+  oracle: string;
   tokenOut: string;
+  usdc: string;
+  bnb: string;
+  usdcPool: string;
+  bnbPool: string;
 };
 
 export function readDeployments(path: string): PaymasterDeployments {

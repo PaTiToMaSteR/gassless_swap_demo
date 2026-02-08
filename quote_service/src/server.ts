@@ -46,6 +46,7 @@ export class QuoteServiceServer {
   private readonly abisDir: string;
   private readonly routerInterface: ethers.utils.Interface;
   private readonly router: ethers.Contract;
+  private readonly oracle: ethers.Contract;
   private readonly logger: Logger;
 
   private quotes = new Map<string, StoredQuote>();
@@ -56,6 +57,7 @@ export class QuoteServiceServer {
     this.abisDir = path.join(path.dirname(config.deploymentsPath), "abis");
     this.routerInterface = new ethers.utils.Interface(readAbi(this.abisDir, "DemoRouter"));
     this.router = new ethers.Contract(this.deployments.router, this.routerInterface, this.provider);
+    this.oracle = new ethers.Contract(this.deployments.oracle, readAbi(this.abisDir, "MockPriceOracle"), this.provider);
     this.logger = new Logger({ logIngestUrl: config.logIngestUrl });
 
     fs.mkdirSync(this.config.dataDir, { recursive: true });
@@ -116,7 +118,8 @@ export class QuoteServiceServer {
         quoteTtlSec: this.config.quoteTtlSec,
         deployments: this.deployments,
         supportedPairs: [
-          { tokenIn: this.deployments.tokenIn, tokenOut: this.deployments.tokenOut, router: this.deployments.router },
+          { symbol: "USDC", tokenIn: this.deployments.usdc, tokenOut: this.deployments.tokenOut, router: this.deployments.router },
+          { symbol: "BNB", tokenIn: this.deployments.bnb, tokenOut: this.deployments.tokenOut, router: this.deployments.router },
         ],
       });
     });
@@ -141,11 +144,13 @@ export class QuoteServiceServer {
           return res.status(400).json({ error: "Invalid slippageBps" });
         }
 
-        // demo supports only the single deployed pair
-        if (
-          tokenIn.toLowerCase() !== this.deployments.tokenIn.toLowerCase() ||
-          tokenOut.toLowerCase() !== this.deployments.tokenOut.toLowerCase()
-        ) {
+        // Check if token pair is supported (tUSDC or fBNB against WAVAX)
+        const isSupported =
+          tokenOut.toLowerCase() === this.deployments.tokenOut.toLowerCase() &&
+          (tokenIn.toLowerCase() === this.deployments.usdc.toLowerCase() ||
+            tokenIn.toLowerCase() === this.deployments.bnb.toLowerCase());
+
+        if (!isSupported) {
           return res.status(400).json({ error: "Unsupported token pair" });
         }
 
@@ -153,8 +158,15 @@ export class QuoteServiceServer {
         const createdAt = nowSec();
         const deadline = createdAt + this.config.quoteTtlSec;
 
-        const expectedOut: ethers.BigNumber = await this.router.callStatic.quoteExactIn(tokenIn, tokenOut, amountIn);
-        const minOut = expectedOut.mul(10_000 - slippageBps).div(10_000);
+        // Fetch "Fair Price" from Oracle
+        const oraclePriceWei: ethers.BigNumber = await this.oracle.getPrice(tokenIn);
+        const decimals = await this.oracle.decimals(tokenIn);
+
+        // expectedOut (Wei) = (amountIn * oraclePriceWei) / 10^decimals
+        const expectedOut = amountIn.mul(oraclePriceWei).div(ethers.BigNumber.from(10).pow(decimals));
+
+        // Account for a small "simulated" pool spread (e.g. 0.3%)
+        const minOut = expectedOut.mul(10_000 - (slippageBps + 30)).div(10_000);
 
         const calldata = this.routerInterface.encodeFunctionData("swapExactIn", [
           tokenIn,

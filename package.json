@@ -1,0 +1,25 @@
+{
+  "name": "consensys_test",
+  "version": "1.0.0",
+  "description": "This repo is a **take‑home demo build** for “Designing a Gasless Swap Experience”.",
+  "main": "ecosystem.config.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev:pm2": "./scripts/dev-pm2.sh",
+    "pm2": "pm2"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "axios": "^1.6.0",
+    "ethers": "^5.7.2",
+    "pm2": "^6.0.14",
+    "ts-node": "^10.9.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.2.2"
+  }
+}

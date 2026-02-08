@@ -14,6 +14,7 @@ import "../src/demo/TestERC20.sol";
 import "../src/demo/WNative.sol";
 import "../src/demo/DemoPool.sol";
 import "../src/demo/DemoRouter.sol";
+import "../src/demo/MockPriceOracle.sol";
 import "../src/GaslessSwapPaymaster.sol";
 
 /**
@@ -35,6 +36,7 @@ contract GaslessSwapPaymasterTest is Test {
     WNative internal wavax;
     DemoPool internal pool;
     DemoRouter internal router;
+    MockPriceOracle internal oracle;
 
     // The Paymaster under test
     GaslessSwapPaymaster internal paymaster;
@@ -63,10 +65,15 @@ contract GaslessSwapPaymasterTest is Test {
         pool = new DemoPool(address(usdc), address(wavax), 30);
         router = new DemoRouter(pool);
 
+        // Deploy Oracle and set price
+        oracle = new MockPriceOracle();
+        oracle.setPrice(address(usdc), 400_000 * 1e9, 6); // 1 USDC = 4e14 Wei
+
         // Deploy and Configure Paymaster
         paymaster = new GaslessSwapPaymaster(
             entryPoint,
             router,
+            oracle,
             address(usdc),
             address(wavax)
         );

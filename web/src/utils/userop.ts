@@ -131,6 +131,11 @@ export function buildPackedUserOpV07(userOp: UserOpV07): any {
     gasFees,
     paymasterAndData,
     signature: userOp.signature,
+    // v0.6 fields for compatibility
+    callGasLimit: BigNumber.from(userOp.callGasLimit).toHexString(),
+    verificationGasLimit: BigNumber.from(userOp.verificationGasLimit).toHexString(),
+    maxFeePerGas: BigNumber.from(userOp.maxFeePerGas).toHexString(),
+    maxPriorityFeePerGas: BigNumber.from(userOp.maxPriorityFeePerGas).toHexString(),
     // Note: eip7702Auth is passed as an extra field for the bundler to handle
     eip7702Auth: userOp.eip7702Auth,
   };

@@ -307,6 +307,10 @@ export class MonitorServer {
       });
     });
 
+    this.app.get("/api/admin/metrics/failures", async (_req, res) => {
+      res.json({ failures: this.userOps.getFailureMetrics() });
+    });
+
     this.app.get("/api/admin/metrics/timeseries", async (req, res) => {
       const q = (k: string): string | undefined => (typeof req.query[k] === "string" ? String(req.query[k]) : undefined);
       const windowSec = q("windowSec") ? Number(q("windowSec")) : undefined;

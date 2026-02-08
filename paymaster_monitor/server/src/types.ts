@@ -57,6 +57,7 @@ export type EntryPointUserOperationEvent = {
   actualGasUsed: string; // decimal string
 
   bundler?: HexString; // tx.from of handleOps
+  revertReason?: string;
 };
 
 export type PaymasterPostOpHandledEvent = {
@@ -93,6 +94,7 @@ export type UserOpSummary = {
   // enriched from paymaster events (optional if not indexed yet)
   feeAmount?: string;
   postOpMode?: PaymasterPostOpHandledEvent["mode"];
+  revertReason?: string;
 };
 
 export type UserOpsMetricsSummary = {

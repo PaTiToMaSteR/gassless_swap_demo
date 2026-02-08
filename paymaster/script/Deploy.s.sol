@@ -13,6 +13,7 @@ import "../src/demo/TestERC20.sol";
 import "../src/demo/WNative.sol";
 import "../src/demo/DemoPool.sol";
 import "../src/demo/DemoRouter.sol";
+import "../src/demo/MockPriceOracle.sol";
 import "../src/GaslessSwapPaymaster.sol";
 
 /**
@@ -40,9 +41,12 @@ contract Deploy is Script {
         address factory;
         address paymaster;
         address router;
-        address pool;
-        address tokenIn;
-        address tokenOut;
+        address oracle;
+        address tokenOut; // WAVAX
+        address usdc;
+        address bnb;
+        address usdcPool;
+        address bnbPool;
     }
 
     /**
@@ -71,26 +75,33 @@ contract Deploy is Script {
 
         SimpleAccountFactory factory = new SimpleAccountFactory(ep);
 
-        // --- Step 2: Tokens ---
-        // tokenIn: Simulated USDC (6 decimals)
-        // tokenOut: Simulated native wrapper (e.g. WAVAX)
-        TestERC20 tokenIn = new TestERC20("Test USDC", "tUSDC", 6);
+        // --- Step 2: Tokens & Oracle ---
+        TestERC20 usdc = new TestERC20("Test USDC", "tUSDC", 6);
+        TestERC20 bnb = new TestERC20("Fake BNB", "fBNB", 18);
         WNative tokenOut = new WNative("Wrapped AVAX", "WAVAX");
+        MockPriceOracle oracle = new MockPriceOracle();
+
+        // Seed Oracle prices (relative to 1 ETH/AVAX)
+        // 1 ETH = 2500 USDC (6 decimals) -> 1 USDC = 1/2500 ETH = 400,000,000,000,000 Wei (4e14)
+        // 1 ETH = 5 BNB (18 decimals) -> 1 BNB = 0.2 ETH = 200,000,000,000,000,000 Wei (2e17)
+        oracle.setPrice(address(usdc), 400_000 * 1e9, 6);
+        oracle.setPrice(address(bnb), 0.2 ether, 18);
 
         // --- Step 3: Swap Infrastructure ---
-        // Sets up a basic 1:1 pool with 0.3% fee (30 bps) for the tokens
-        DemoPool pool = new DemoPool(address(tokenIn), address(tokenOut), 30);
-        DemoRouter router = new DemoRouter(pool);
+        DemoPool usdcPool = new DemoPool(address(usdc), address(tokenOut), 30);
+        DemoPool bnbPool = new DemoPool(address(bnb), address(tokenOut), 30);
+        DemoRouter router = new DemoRouter(usdcPool); // default router uses USDC
 
         // --- Step 4: Paymaster ---
         GaslessSwapPaymaster paymaster = new GaslessSwapPaymaster(
             ep,
             router,
-            address(tokenIn),
+            oracle,
+            address(usdc),
             address(tokenOut)
         );
 
-        // Configure sponsorship rules (can be overridden via environment variables)
+        // Configure sponsorship rules
         paymaster.setPolicy({
             gasBufferBps_: vm.envOr("PAYMASTER_GAS_BUFFER_BPS", uint256(500)),
             fixedMarkupWei_: vm.envOr("PAYMASTER_FIXED_MARKUP_WEI", uint256(0)),
@@ -101,20 +112,25 @@ contract Deploy is Script {
         });
 
         // --- Step 5: Liquidity Seeding ---
-        // Ensuring the router has enough depth to handle swaps for gas fees
         uint256 seedUsdc = vm.envOr("SEED_USDC", uint256(1_000_000e6));
+        uint256 seedBnb = vm.envOr("SEED_BNB", uint256(5_000 ether));
         uint256 seedWavax = vm.envOr("SEED_WAVAX", uint256(1_000 ether));
 
-        tokenIn.mint(deployer, seedUsdc * 2);
-        tokenOut.deposit{value: seedWavax * 2}();
+        usdc.mint(deployer, seedUsdc * 2);
+        bnb.mint(deployer, seedBnb * 2);
+        tokenOut.deposit{value: seedWavax * 4}();
 
-        // Approve and add liquidity to the pool
-        IERC20(address(tokenIn)).approve(address(pool), type(uint256).max);
-        IERC20(address(tokenOut)).approve(address(pool), type(uint256).max);
-        pool.addLiquidity(seedUsdc, seedWavax);
+        // Seed USDC Pool
+        usdc.approve(address(usdcPool), type(uint256).max);
+        tokenOut.approve(address(usdcPool), type(uint256).max);
+        usdcPool.addLiquidity(seedUsdc, seedWavax);
+
+        // Seed BNB Pool
+        bnb.approve(address(bnbPool), type(uint256).max);
+        tokenOut.approve(address(bnbPool), type(uint256).max);
+        bnbPool.addLiquidity(seedBnb, seedWavax);
 
         // --- Step 6: Paymaster Funding ---
-        // The Paymaster needs native tokens deposited in EntryPoint to cover sponsored gas
         uint256 paymasterDeposit = vm.envOr(
             "PAYMASTER_DEPOSIT_WEI",
             uint256(10 ether)
@@ -127,9 +143,12 @@ contract Deploy is Script {
             factory: address(factory),
             paymaster: address(paymaster),
             router: address(router),
-            pool: address(pool),
-            tokenIn: address(tokenIn),
-            tokenOut: address(tokenOut)
+            oracle: address(oracle),
+            tokenOut: address(tokenOut),
+            usdc: address(usdc),
+            bnb: address(bnb),
+            usdcPool: address(usdcPool),
+            bnbPool: address(bnbPool)
         });
 
         // End broadcast session
@@ -153,7 +172,7 @@ contract Deploy is Script {
 
         string memory path = string.concat(dir, "/addresses.json");
 
-        // Format the JSON content manually (common pattern in Foundry scripts)
+        // Format the JSON content manually
         string memory json = string.concat(
             "{\n",
             '  "chainId": ',
@@ -171,14 +190,23 @@ contract Deploy is Script {
             '  "router": "',
             vm.toString(d.router),
             '",\n',
-            '  "pool": "',
-            vm.toString(d.pool),
-            '",\n',
-            '  "tokenIn": "',
-            vm.toString(d.tokenIn),
+            '  "oracle": "',
+            vm.toString(d.oracle),
             '",\n',
             '  "tokenOut": "',
             vm.toString(d.tokenOut),
+            '",\n',
+            '  "usdc": "',
+            vm.toString(d.usdc),
+            '",\n',
+            '  "bnb": "',
+            vm.toString(d.bnb),
+            '",\n',
+            '  "usdcPool": "',
+            vm.toString(d.usdcPool),
+            '",\n',
+            '  "bnbPool": "',
+            vm.toString(d.bnbPool),
             '"\n',
             "}\n"
         );

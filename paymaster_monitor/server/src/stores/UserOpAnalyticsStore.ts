@@ -33,6 +33,7 @@ export class UserOpAnalyticsStore {
         actualGasUsed: e.actualGasUsed,
         feeAmount: existing?.feeAmount,
         postOpMode: existing?.postOpMode,
+        revertReason: e.revertReason ?? existing?.revertReason,
       };
 
       this.byHash.set(key, next);
@@ -122,6 +123,19 @@ export class UserOpAnalyticsStore {
       totalActualGasCostWei: totalGas.toString(),
       totalFeeAmount: totalFee.toString(),
     };
+  }
+
+  getFailureMetrics(): Array<{ reason: string; count: number }> {
+    const reasons = new Map<string, number>();
+    for (const u of this.byHash.values()) {
+      if (!u.success) {
+        const r = u.revertReason || "Unknown / Reverted";
+        reasons.set(r, (reasons.get(r) ?? 0) + 1);
+      }
+    }
+    return Array.from(reasons.entries())
+      .map(([reason, count]) => ({ reason, count }))
+      .sort((a, b) => b.count - a.count);
   }
 
   perSenderMetrics(): SenderMetrics[] {

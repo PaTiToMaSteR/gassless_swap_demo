@@ -1,0 +1,160 @@
+:root {
+    --bg: #111;
+    --panel: #1a1a1a;
+    --text: #eee;
+    --accent: #007bff;
+    --good: #28a745;
+    --bad: #dc3545;
+    --border: #333;
+}
+
+body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+.container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 20px;
+}
+
+h1 {
+    margin: 0;
+    font-size: 1.5rem;
+}
+
+.status-badge span {
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: bold;
+}
+
+.good {
+    color: var(--good);
+    background: rgba(40, 167, 69, 0.2);
+}
+
+.bad {
+    color: var(--bad);
+    background: rgba(220, 53, 69, 0.2);
+}
+
+.panel {
+    background: var(--panel);
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+    border: 1px solid var(--border);
+}
+
+.panel h2 {
+    margin-top: 0;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 10px;
+    margin-bottom: 10px;
+    font-size: 1.2rem;
+}
+
+.prices-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.price-card {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 15px;
+    border-radius: 6px;
+    text-align: center;
+}
+
+.symbol {
+    font-weight: bold;
+    color: #bbb;
+    font-size: 0.9rem;
+}
+
+.price {
+    font-size: 1.2rem;
+    margin-top: 5px;
+    font-family: monospace;
+}
+
+.actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+button {
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 0.9rem;
+}
+
+button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.last-update {
+    font-size: 0.8rem;
+    color: #888;
+}
+
+.logs-list {
+    max-height: 300px;
+    overflow-y: auto;
+    font-family: monospace;
+}
+
+.log-item {
+    display: flex;
+    gap: 10px;
+    padding: 4px 0;
+    border-bottom: 1px solid #222;
+    font-size: 0.85rem;
+}
+
+.log-item .ts {
+    color: #666;
+}
+
+.log-item.update .symbol {
+    color: var(--good);
+}
+
+.log-item.skip .symbol {
+    color: #888;
+}
+
+.log-item.error {
+    color: var(--bad);
+}
+
+.err {
+    color: var(--bad);
+}
+
+.tx {
+    color: var(--accent);
+    text-decoration: none;
+}
