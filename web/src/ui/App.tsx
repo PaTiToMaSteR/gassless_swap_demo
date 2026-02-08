@@ -891,7 +891,6 @@ export function App() {
       );
 
       // final hybrid object
-      const u1 = mkSponsoredUserOp(feeAmount, gas1);
       const packed = buildPackedUserOpV07(u1);
 
       // For v0.6 hashing, we need to pass the v0.6 struct format. 
