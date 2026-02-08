@@ -128,7 +128,7 @@ else
     printf '[dev-up] Port 8545 is occupied by a non-RPC process. Free it and rerun.\n' >&2
     exit 1
   fi
-  start_process "anvil" "cd '${ROOT_DIR}' && exec anvil --mnemonic '${ANVIL_MNEMONIC}' --chain-id 31337"
+  start_process "anvil" "cd '${ROOT_DIR}' && exec anvil --mnemonic '${ANVIL_MNEMONIC}' --chain-id 31337 --block-time 1"
   wait_for_rpc 20
 fi
 
