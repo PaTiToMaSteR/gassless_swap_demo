@@ -103,7 +103,7 @@ export class QuoteServiceServer {
       try {
         const net = await this.provider.getNetwork();
         // simple sanity call
-        await this.router.callStatic.quoteExactIn(this.deployments.tokenIn, this.deployments.tokenOut, 1);
+        await this.router.callStatic.quoteExactIn(this.deployments.usdc, this.deployments.tokenOut, 1);
         res.json({ ok: true, chainId: net.chainId });
       } catch (err: any) {
         res.status(500).json({ ok: false, error: err?.message ?? "health failed" });

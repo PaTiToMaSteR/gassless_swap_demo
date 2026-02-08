@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Unset NODE_OPTIONS to prevent debugger from attaching automatically if set in user env
+unset NODE_OPTIONS
+export NODE_OPTIONS=""
+
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUTPUT_DIR="${ROOT_DIR}/output/local-dev"
 LOG_DIR="${OUTPUT_DIR}/logs"
@@ -83,8 +87,10 @@ start_process() {
   local log_file="${LOG_DIR}/${name}.log"
   local pid_file="${PID_DIR}/${name}.pid"
 
+
   log "Starting ${name}"
-  nohup bash -lc "${command}" >"${log_file}" 2>&1 &
+  # Unset NODE_OPTIONS inside the subshell in case it's set by .bashrc/.zshrc
+  nohup bash -lc "unset NODE_OPTIONS; ${command}" >"${log_file}" 2>&1 &
   local pid=$!
   echo "${pid}" > "${pid_file}"
 }
@@ -93,6 +99,7 @@ fail_cleanup() {
   printf '[dev-up] Startup failed. Cleaning up managed processes.\n' >&2
   "${ROOT_DIR}/scripts/dev-down.sh" --quiet || true
 }
+
 
 trap fail_cleanup ERR
 
@@ -174,7 +181,7 @@ wait_for_http "${ORACLE_URL}/status" 60
 start_process \
   "oracle_web" \
   "cd '${ROOT_DIR}/oracle_service/web' && exec env npm run dev -- --host 127.0.0.1 --port 5176"
-wait_for_http "${ORACLE_WEB_URL}" 30
+wait_for_http "${ORACLE_WEB_URL}" 90
 
 log "Spawning bundler1 and bundler2 via monitor admin API"
 curl -fsS -X POST "${MONITOR_URL}/api/admin/bundlers/spawn" \
