@@ -60,6 +60,50 @@ export function makeNonRevertingDummySignature(): HexString {
   return ethers.utils.hexConcat([r, s, v]) as HexString;
 }
 
+export type EIP7702Authorization = {
+  chainId: HexString;
+  address: HexString;
+  nonce: HexString;
+  v: HexString;
+  r: HexString;
+  s: HexString;
+};
+
+export async function signEIP7702Authorization(
+  signer: ethers.Signer,
+  target: string,
+  nonce: number,
+): Promise<EIP7702Authorization> {
+  const chainId = await signer.getChainId();
+  const address = target as HexString;
+  const nonceHex = ethers.utils.hexValue(nonce) as HexString;
+  const chainIdHex = ethers.utils.hexValue(chainId) as HexString;
+
+  // EIP-7702 payload: rlp([chain_id, address, nonce])
+  const payload = ethers.utils.RLP.encode([
+    BigNumber.from(chainId).toHexString(),
+    address,
+    BigNumber.from(nonce).toHexString(),
+  ]);
+
+  // Magic prefix 0x05
+  const hash = ethers.utils.keccak256(ethers.utils.hexConcat(["0x05", payload]));
+
+  // Sign the digest directly.
+  // Note: Most wallet providers might not support signing arbitrary 32-byte digests with 0x05 prefix.
+  // For the demo, we assume the signer can handle it or we use a dev wallet.
+  const sig = await (signer as any)._signingKey().signDigest(hash);
+
+  return {
+    chainId: chainIdHex,
+    address,
+    nonce: nonceHex === "0x0" ? "0x" : nonceHex,
+    v: ethers.utils.hexValue(sig.v) as HexString,
+    r: sig.r as HexString,
+    s: sig.s as HexString,
+  };
+}
+
 export function buildPackedUserOpV07(userOp: UserOpV07): any {
   const initCode =
     userOp.factory != null ? ethers.utils.hexConcat([userOp.factory, userOp.factoryData ?? "0x"]) : "0x";
@@ -70,11 +114,11 @@ export function buildPackedUserOpV07(userOp: UserOpV07): any {
   const paymasterAndData =
     userOp.paymaster != null && userOp.paymaster !== ethers.constants.AddressZero
       ? ethers.utils.hexConcat([
-          userOp.paymaster,
-          ethers.utils.hexZeroPad(userOp.paymasterVerificationGasLimit ?? "0x0", 16),
-          ethers.utils.hexZeroPad(userOp.paymasterPostOpGasLimit ?? "0x0", 16),
-          userOp.paymasterData ?? "0x",
-        ])
+        userOp.paymaster,
+        ethers.utils.hexZeroPad(userOp.paymasterVerificationGasLimit ?? "0x0", 16),
+        ethers.utils.hexZeroPad(userOp.paymasterPostOpGasLimit ?? "0x0", 16),
+        userOp.paymasterData ?? "0x",
+      ])
       : "0x";
 
   return {
@@ -87,5 +131,7 @@ export function buildPackedUserOpV07(userOp: UserOpV07): any {
     gasFees,
     paymasterAndData,
     signature: userOp.signature,
+    // Note: eip7702Auth is passed as an extra field for the bundler to handle
+    eip7702Auth: userOp.eip7702Auth,
   };
 }

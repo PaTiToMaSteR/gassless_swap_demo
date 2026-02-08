@@ -66,6 +66,15 @@ export type SwapStep =
   | "success"
   | "failed";
 
+export type EIP7702Authorization = {
+  chainId: HexString;
+  address: HexString;
+  nonce: HexString;
+  v: HexString;
+  r: HexString;
+  s: HexString;
+};
+
 export type UserOpV07 = {
   sender: HexString;
   nonce: HexString;
@@ -82,6 +91,6 @@ export type UserOpV07 = {
   paymasterPostOpGasLimit?: HexString;
   paymasterData?: HexString;
   signature: HexString;
-  eip7702Auth?: unknown | null;
+  eip7702Auth?: EIP7702Authorization | null;
 };
 

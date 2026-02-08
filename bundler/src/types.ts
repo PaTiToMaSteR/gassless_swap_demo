@@ -38,6 +38,15 @@ export type BundlerConfig = {
   observability?: BundlerObservabilityConfig;
 };
 
+export type EIP7702Authorization = {
+  chainId: HexString;
+  address: HexString;
+  nonce: HexString;
+  v: HexString;
+  r: HexString;
+  s: HexString;
+};
+
 // ERC-4337 v0.7 "unpacked" user operation (JSON-RPC shape)
 export type RpcUserOperationV07 = {
   sender: HexString;
@@ -55,8 +64,7 @@ export type RpcUserOperationV07 = {
   paymasterPostOpGasLimit?: HexString;
   paymasterData?: HexString;
   signature: HexString;
-  // EIP-7702 support is out of scope for the demo
-  eip7702Auth?: unknown | null;
+  eip7702Auth?: EIP7702Authorization | null;
 };
 
 export type PackedUserOperationV07 = {

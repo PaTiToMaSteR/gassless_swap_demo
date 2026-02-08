@@ -64,11 +64,11 @@ export function packUserOpV07(userOp: RpcUserOperationV07): PackedUserOperationV
   const paymasterAndData =
     userOp.paymaster != null && userOp.paymaster !== ethers.constants.AddressZero
       ? ethers.utils.hexConcat([
-          userOp.paymaster,
-          ethers.utils.hexZeroPad(userOp.paymasterVerificationGasLimit ?? "0x0", 16),
-          ethers.utils.hexZeroPad(userOp.paymasterPostOpGasLimit ?? "0x0", 16),
-          asHexOrZero(userOp.paymasterData),
-        ])
+        userOp.paymaster,
+        ethers.utils.hexZeroPad(userOp.paymasterVerificationGasLimit ?? "0x0", 16),
+        ethers.utils.hexZeroPad(userOp.paymasterPostOpGasLimit ?? "0x0", 16),
+        asHexOrZero(userOp.paymasterData),
+      ])
       : "0x";
 
   return {
@@ -144,4 +144,87 @@ export function parseValidationData(validationData: string): { validAfter: numbe
     validAfter,
     validUntil: validUntil === 0 ? Number.MAX_SAFE_INTEGER : validUntil,
   };
+}
+export function encodeEIP7702Transaction(tx: {
+  chainId: number;
+  nonce: number;
+  maxPriorityFeePerGas: BigNumber;
+  maxFeePerGas: BigNumber;
+  gasLimit: BigNumber;
+  to: string;
+  value: BigNumber;
+  data: string;
+  accessList: any[];
+  authorizationList: any[];
+}, signature: { v: number, r: string, s: string }): string {
+  // EIP-7702 Type 4 transaction RLP:
+  // [chain_id, nonce, max_priority_fee_per_gas, max_fee_per_gas, gas_limit, to, value, data, access_list, authorization_list, signature_y_parity, signature_r, signature_s]
+
+  const encodedAuthList = tx.authorizationList.map(auth => [
+    BigNumber.from(auth.chainId).toHexString(),
+    auth.address,
+    BigNumber.from(auth.nonce).toHexString() === "0x0" ? "0x" : BigNumber.from(auth.nonce).toHexString(),
+    BigNumber.from(auth.v).toHexString(),
+    auth.r,
+    auth.s
+  ]);
+
+  const items = [
+    BigNumber.from(tx.chainId).toHexString(),
+    BigNumber.from(tx.nonce).toHexString() === "0x0" ? "0x" : BigNumber.from(tx.nonce).toHexString(),
+    tx.maxPriorityFeePerGas.toHexString() === "0x0" ? "0x" : tx.maxPriorityFeePerGas.toHexString(),
+    tx.maxFeePerGas.toHexString() === "0x0" ? "0x" : tx.maxFeePerGas.toHexString(),
+    tx.gasLimit.toHexString(),
+    tx.to,
+    tx.value.toHexString() === "0x0" ? "0x" : tx.value.toHexString(),
+    tx.data,
+    tx.accessList,
+    encodedAuthList,
+    BigNumber.from(signature.v).toHexString() === "0x0" ? "0x" : BigNumber.from(signature.v).toHexString(),
+    signature.r,
+    signature.s
+  ];
+
+  return ethers.utils.hexConcat(["0x04", ethers.utils.RLP.encode(items)]);
+}
+export async function signEIP7702Transaction(
+  wallet: ethers.Wallet,
+  tx: {
+    chainId: number;
+    nonce: number;
+    maxPriorityFeePerGas: BigNumber;
+    maxFeePerGas: BigNumber;
+    gasLimit: BigNumber;
+    to: string;
+    value: BigNumber;
+    data: string;
+    accessList: any[];
+    authorizationList: any[];
+  }
+): Promise<string> {
+  const items = [
+    BigNumber.from(tx.chainId).toHexString(),
+    BigNumber.from(tx.nonce).toHexString() === "0x0" ? "0x" : BigNumber.from(tx.nonce).toHexString(),
+    tx.maxPriorityFeePerGas.toHexString() === "0x0" ? "0x" : tx.maxPriorityFeePerGas.toHexString(),
+    tx.maxFeePerGas.toHexString() === "0x0" ? "0x" : tx.maxFeePerGas.toHexString(),
+    tx.gasLimit.toHexString(),
+    tx.to,
+    tx.value.toHexString() === "0x0" ? "0x" : tx.value.toHexString(),
+    tx.data,
+    tx.accessList,
+    tx.authorizationList.map(auth => [
+      BigNumber.from(auth.chainId).toHexString(),
+      auth.address,
+      BigNumber.from(auth.nonce).toHexString() === "0x0" ? "0x" : BigNumber.from(auth.nonce).toHexString(),
+      BigNumber.from(auth.v).toHexString(),
+      auth.r,
+      auth.s
+    ])
+  ];
+
+  const unsignedTx = ethers.utils.hexConcat(["0x04", ethers.utils.RLP.encode(items)]);
+  const hash = ethers.utils.keccak256(unsignedTx);
+  const signature = (wallet as any)._signingKey().signDigest(hash);
+
+  return encodeEIP7702Transaction(tx, signature);
 }

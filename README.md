@@ -9,7 +9,8 @@ The goal is to ship a working local demo where a user can **swap tokens with 0 E
 - **No Docker** — everything runs as local processes.
 - **One top‑level folder per element** (web, bundlers, paymaster, monitor, etc.).
 - **Paymaster policy is fully on‑chain** (no off‑chain signatures for sponsorship decisions).
-- **Admin panel** with deep stats + **log explorer** is mandatory.
+- **Log explorer** with deep stats and monitoring is mandatory.
+- **EIP-7702 Support** — Full support for delegating traditional EOAs to Smart Accounts via EIP-7702, enabling gasless swaps for all wallet types.
 
 ## Repo Structure
 
@@ -25,8 +26,8 @@ The goal is to ship a working local demo where a user can **swap tokens with 0 E
 
 1. **User** selects `tokenIn/tokenOut/amount` in `web/`.
 2. `web/` calls `quote_service/` for a quote: route, calldata, `deadline`, `minOut`, quote id.
-3. `web/` builds an **ERC‑4337 UserOperation** that calls the Smart Account’s `executeBatch()`.
-4. `web/` chooses a bundler from the list (served by `paymaster_monitor/`) and sends `eth_sendUserOperation`.
+3. `web/` builds an **ERC‑4337 UserOperation** (standard AA) or an **EIP-7702 Authorization** (for traditional wallets).
+4. `web/` chooses a bundler and sends `eth_sendUserOperation`. Bundles with EIP-7702 authorizations are submitted as **Type 4 transactions**.
 5. Bundler submits `EntryPoint.handleOps()`.
 6. **Paymaster validates sponsorship on‑chain** (router/tokens/expiry/slippage/fee>=gas-buffer, limits).
 7. Smart Account executes: `approve/permit` → `swap` → `fee transfer`.

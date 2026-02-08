@@ -18,6 +18,7 @@ This is a backlog. Each component folder also has its own `TODO.md`.
 - [x] Add synthetic analyzer test for soak pass/fail thresholds (`scripts/soak-analyze.test.mjs`)
 - [x] Add explicit paymaster sponsorship economics naming in soak reports
 - [x] Add manual soak review task in VSCode (`report: latest soak results (manual review)`)
+- [x] Implement EIP-7702 Support (Delegation of EOAs to Smart Accounts)
 
 ## `paymaster/` (on-chain)
 

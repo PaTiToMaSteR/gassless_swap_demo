@@ -28,9 +28,14 @@ export default function TxDetail() {
                 <div className="mb-4 flex items-center justify-between">
                     <h3 className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wider">Overview</h3>
                     {receipt ? (
-                        <div className={`pill ${isSuccess ? 'good' : 'bad'} py-1 px-3`}>
-                            {isSuccess ? <CheckCircle className="w-3 h-3 mr-1.5" /> : <XCircle className="w-3 h-3 mr-1.5" />}
-                            {isSuccess ? 'Success' : 'Failed'}
+                        <div className="flex gap-2">
+                            {(tx as any).type === 4 && (
+                                <div className="pill py-1 px-3 border-purple-500/30 text-purple-400 bg-purple-500/5">EIP-7702 Bundle</div>
+                            )}
+                            <div className={`pill ${isSuccess ? 'good' : 'bad'} py-1 px-3`}>
+                                {isSuccess ? <CheckCircle className="w-3 h-3 mr-1.5" /> : <XCircle className="w-3 h-3 mr-1.5" />}
+                                {isSuccess ? 'Success' : 'Failed'}
+                            </div>
                         </div>
                     ) : (
                         <div className="pill py-1 px-3 border-yellow-500/30 text-yellow-400">Pending</div>
@@ -86,6 +91,26 @@ export default function TxDetail() {
                             {tx.data}
                         </div>
                     </div>
+
+                    {(tx as any).authorizationList && (tx as any).authorizationList.length > 0 && (
+                        <div className="flex flex-col md:col-span-2">
+                            <span className="text-[10px] text-[var(--faint)] mb-1">EIP-7702 Authorizations</span>
+                            <div className="space-y-2">
+                                {(tx as any).authorizationList.map((auth: any, idx: number) => (
+                                    <div key={idx} className="p-3 rounded-xl bg-purple-500/5 border border-purple-500/20 text-[10px] font-mono">
+                                        <div className="flex justify-between mb-1">
+                                            <span className="text-purple-400">Address:</span>
+                                            <Link to={`/address/${auth.address}`} className="text-[var(--text)] hover:underline">{auth.address}</Link>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span className="text-purple-400">Chain ID:</span>
+                                            <span className="text-[var(--text)]">{auth.chainId}</span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

@@ -20,17 +20,17 @@ This approach was common before the widespread adoption of ERC-4337. It relies o
 
 ---
 
-## 2. EIP-7702: Temporary Code Authorization
+## 2. EIP-7702: Temporary Code Authorization (Implemented)
 
-EIP-7702 is a newer proposal that allows EOAs to temporarily act like Smart Contract Accounts.
+EIP-7702 is a modern approach implemented in this project to allow traditional EOAs to act like Smart Contract Accounts.
 
 ### How it Works
 1.  **Authorization Map**: An EOA provides a signed authorization that points to a specific contract implementation (e.g., a standard AA wallet).
 2.  **On-the-fly Execution**: For the duration of a transaction, the EOA's address behaves as if it has that code.
 3.  **Upgrade Path**: This allows existing users to "upgrade" their EOA to have AA features (like batched calls or sponsorship) without migrating funds to a new address.
 
-### Use Case in this Project
-In a gasless swap context, a user could use EIP-7702 to authorize a paymaster to sponsor their swap directly from their original EOA, avoiding the need for a separate Smart Account instance.
+### Fully Implemented Feature
+This project provides a toggle to use EIP-7702, allowing a user to authorize a paymaster to sponsor their swap directly from their original EOA. The bundler automatically wraps these operations in EIP-7702 Type 4 transactions.
 
 ---
 

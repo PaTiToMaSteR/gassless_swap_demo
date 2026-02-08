@@ -9,7 +9,7 @@ import type {
   UserOperationReceipt,
 } from "./types";
 import { RpcError, RpcErrorCodes } from "./rpcErrors";
-import { packUserOpV07, parseValidationData, unpackUserOpV07 } from "./packing";
+import { packUserOpV07, parseValidationData, signEIP7702Transaction, unpackUserOpV07 } from "./packing";
 import { simulateValidationV07 } from "./simulations";
 import { calcPreVerificationGasV07 } from "./preVerificationGas";
 import { Logger } from "./logging";
@@ -27,6 +27,7 @@ type MempoolEntry = {
   status: "pending" | "sent" | "mined" | "failed";
   txHash?: string;
   txReceipt?: ethers.providers.TransactionReceipt;
+  eip7702Auth?: any;
 };
 
 export class BundlerEngine {
@@ -245,6 +246,7 @@ export class BundlerEngine {
       userOpHash,
       receivedAtMs: Date.now(),
       status: "pending",
+      eip7702Auth: userOp.eip7702Auth,
     };
     this.mempool.set(userOpHash, entry);
 
@@ -358,6 +360,7 @@ export class BundlerEngine {
     try {
       const beneficiary = await this._selectBeneficiary();
       const ops = pending.map((e) => e.packed);
+      const authList = pending.map((e) => e.eip7702Auth).filter(Boolean);
 
       await this.logger.log({
         ts: Math.floor(Date.now() / 1000),
@@ -367,10 +370,36 @@ export class BundlerEngine {
           beneficiary,
           ops: pending.length,
           userOpHashes: pending.map((e) => e.userOpHash),
+          use7702: authList.length > 0,
         },
       });
 
-      const tx = await this.entryPoint.handleOps(ops, beneficiary, { gasLimit: this.config.maxBundleGas });
+      let tx: ethers.providers.TransactionResponse;
+      if (authList.length > 0) {
+        // Send as EIP-7702 Type 4 transaction
+        const data = this.entryPoint.interface.encodeFunctionData("handleOps", [ops, beneficiary]);
+        const nonce = await this.wallet.getTransactionCount();
+        const feeData = await this.provider.getFeeData();
+        const { chainId } = await this.provider.getNetwork();
+
+        const txPayload = {
+          chainId,
+          nonce,
+          maxPriorityFeePerGas: feeData.maxPriorityFeePerGas ?? ethers.utils.parseUnits("1", "gwei"),
+          maxFeePerGas: feeData.maxFeePerGas ?? ethers.utils.parseUnits("2", "gwei"),
+          gasLimit: BigNumber.from(this.config.maxBundleGas),
+          to: this.entryPoint.address,
+          value: BigNumber.from(0),
+          data,
+          accessList: [],
+          authorizationList: authList,
+        };
+
+        const signedRawTx = await signEIP7702Transaction(this.wallet, txPayload);
+        tx = await this.provider.sendTransaction(signedRawTx);
+      } else {
+        tx = await this.entryPoint.handleOps(ops, beneficiary, { gasLimit: this.config.maxBundleGas });
+      }
       pending.forEach((e) => {
         e.status = "sent";
         e.txHash = tx.hash;

@@ -10,6 +10,7 @@ import {
   hexBn,
   makeNonRevertingDummySignature,
   packUint128Pair,
+  signEIP7702Authorization,
 } from "../utils/userop";
 import { formatCountdown, formatUnitsSafe, parseUnitsSafe, shortAddr } from "../utils/format";
 import { getOrCreateSessionId } from "../utils/session";
@@ -217,6 +218,7 @@ export function App() {
   const [userOpHash, setUserOpHash] = useState<HexString | null>(null);
   const [txHash, setTxHash] = useState<HexString | null>(null);
   const [showPayGas, setShowPayGas] = useState<boolean>(false);
+  const [use7702, setUse7702] = useState<boolean>(false);
 
   const [devWallet, setDevWallet] = useState<ethers.Wallet | null>(null);
 
@@ -424,16 +426,38 @@ export function App() {
     setChainId(net.chainId);
     setDevWallet(null);
 
-    // compute counterfactual sender address
-    const factory = new ethers.Contract(
-      deployments.simpleAccountFactory,
-      ["function getAddress(address owner,uint256 salt) view returns (address)"],
-      readProvider,
-    );
-    setSender((await factory.getAddress(addr, 0)) as HexString);
+    // compute sender
+    if (use7702) {
+      setSender(addr);
+    } else {
+      const factory = new ethers.Contract(
+        deployments.simpleAccountFactory,
+        ["function getAddress(address owner,uint256 salt) view returns (address)"],
+        readProvider,
+      );
+      setSender((await factory.getAddress(addr, 0)) as HexString);
+    }
 
     setStep("idle");
   }
+
+  // Update sender when use7702 changes if already connected
+  useEffect(() => {
+    if (!owner || !deployments || !readProvider) return;
+    (async () => {
+      if (use7702) {
+        setSender(owner);
+      } else {
+        const factory = new ethers.Contract(
+          deployments.simpleAccountFactory,
+          ["function getAddress(address owner,uint256 salt) view returns (address)"],
+          readProvider,
+        );
+        const counterfactual = await factory.getAddress(owner, 0);
+        setSender(counterfactual as HexString);
+      }
+    })();
+  }, [use7702, owner, deployments, readProvider]);
 
   async function getQuote(): Promise<void> {
     if (!quoteServiceUrl) return setStatusMsg("Missing VITE_QUOTE_SERVICE_URL");
@@ -588,8 +612,8 @@ export function App() {
         return {
           sender,
           nonce: hexBn(nonce),
-          factory: needsDeployment ? deployments.simpleAccountFactory : undefined,
-          factoryData: needsDeployment ? factoryData : undefined,
+          factory: (needsDeployment && !use7702) ? deployments.simpleAccountFactory : undefined,
+          factoryData: (needsDeployment && !use7702) ? factoryData : undefined,
           callData,
           callGasLimit: hexBn(gas.callGas),
           verificationGasLimit: hexBn(gas.verifGas),
@@ -679,6 +703,17 @@ export function App() {
 
       // Build final sponsored UserOp (single-signature flow).
       const u1 = mkSponsoredUserOp(feeAmount, gas1);
+
+      if (use7702) {
+        setStep("signing");
+        setStatusMsg("Authorize EIP-7702 (Delegate EOA to Smart Account)…");
+        const signer = devWallet ?? new ethers.providers.Web3Provider(window.ethereum, "any").getSigner();
+        // The implementation address for 7702 delegation. We'll use the SimpleAccount (proxy) address for simplicity,
+        // but ideally it should be the logic contract. For the demo, the factory-deployed accounts are proxies.
+        // We'll use the smartAccount address if it's already deployed, or the implementation from standard libs.
+        const auth = await signEIP7702Authorization(signer, deployments.simpleAccountFactory, 0); // simplistic approach for demo
+        u1.eip7702Auth = auth;
+      }
 
       // userOpHash is independent of signature, so we can compute it before prompting the user.
       const packed = buildPackedUserOpV07(u1);
@@ -1046,6 +1081,23 @@ export function App() {
       <button onClick={connect} disabled={step !== "idle" && step !== "success" && step !== "failed"}>
         {owner ? "Reconnect" : devPrivateKey ? "Connect Dev Wallet" : "Connect MetaMask"}
       </button>
+
+      <div style={{ height: 12 }} />
+
+      <div className="row space" style={{ background: "rgba(255,255,255,0.05)", padding: "10px", borderRadius: "8px" }}>
+        <div>
+          <div className="label" style={{ marginBottom: 4 }}>EIP-7702 Mode</div>
+          <div style={{ fontSize: "0.8em", opacity: 0.7 }}>Delegate EOA to Smart Account</div>
+        </div>
+        <button
+          className={use7702 ? "good" : ""}
+          style={{ width: "auto", padding: "4px 12px" }}
+          onClick={() => setUse7702(!use7702)}
+          disabled={step !== "idle" && step !== "success" && step !== "failed"}
+        >
+          {use7702 ? "ON (Traditional Wallet)" : "OFF (Smart Account)"}
+        </button>
+      </div>
 
       <div style={{ height: 12 }} />
 

@@ -4,7 +4,7 @@ import { ArrowLeft, Wallet, CreditCard, Activity, Hash } from 'lucide-react';
 
 export default function AddressDetail() {
     const { address } = useParams();
-    const { balance, txCount, loading } = useAddress(address);
+    const { balance, txCount, is7702, delegatedTo, loading } = useAddress(address);
 
     if (loading) return <div className="p-8 text-center text-[var(--muted)] text-sm">Loading address data...</div>;
 
@@ -49,6 +49,17 @@ export default function AddressDetail() {
                         <p className="text-xl font-semibold text-[var(--text)]">{txCount}</p>
                     </div>
                 </div>
+                {is7702 && (
+                    <div className="kpi flex items-center gap-4 border-purple-500/30 bg-purple-500/5">
+                        <div className="p-2 rounded-xl bg-purple-500/10 text-purple-400">
+                            <Hash size={20} />
+                        </div>
+                        <div>
+                            <h3 className="text-[10px] font-medium text-purple-400 mb-0.5">EIP-7702 Active</h3>
+                            <p className="text-xs font-mono text-purple-300">Delegated to {delegatedTo?.slice(0, 10)}...</p>
+                        </div>
+                    </div>
+                )}
             </div>
 
             <div className="panel">

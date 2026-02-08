@@ -139,6 +139,7 @@ export function useTransaction(txHash: string | undefined) {
 export function useAddress(address: string | undefined) {
     const [balance, setBalance] = useState<string>('0');
     const [txCount, setTxCount] = useState<number>(0);
+    const [code, setCode] = useState<string>('0x');
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -148,13 +149,18 @@ export function useAddress(address: string | undefined) {
             try {
                 const b = await provider.getBalance(address);
                 const count = await provider.getTransactionCount(address);
+                const c = await provider.getCode(address);
                 setBalance(formatEther(b));
                 setTxCount(count);
+                setCode(c);
             } catch (e) { console.error(e); }
             setLoading(false);
         };
         fetch();
     }, [address]);
 
-    return { balance, txCount, loading };
+    const is7702 = code.startsWith('0xef0100');
+    const delegatedTo = is7702 ? '0x' + code.slice(8) : null;
+
+    return { balance, txCount, code, is7702, delegatedTo, loading };
 }
