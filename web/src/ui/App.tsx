@@ -240,7 +240,7 @@ export function App() {
   const [userOpHash, setUserOpHash] = useState<HexString | null>(null);
   const [txHash, setTxHash] = useState<HexString | null>(null);
   const [showPayGas, setShowPayGas] = useState<boolean>(false);
-  const [use7702, setUse7702] = useState<boolean>(true);
+  const [use7702, setUse7702] = useState<boolean>(false);
   const [autoSelectCheapest, setAutoSelectCheapest] = useState<boolean>(true);
   const [bundlerQuotes, setBundlerQuotes] = useState<BundlerQuote[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -336,6 +336,7 @@ export function App() {
           tokenIn: tIn.toString(),
           tokenOut: tOut.toString(),
         });
+        console.error(`[DEBUG] PM Balances: ETH=${eth}, Deposit=${deposit}, tIn=${tIn}, tOut=${tOut}`);
 
         const balances: Record<string, string> = {};
         await Promise.all(
@@ -736,12 +737,21 @@ export function App() {
         setStep("building");
       }
 
+      if (!deployments.entryPoint || !deployments.paymaster || !deployments.router || !deployments.tokenOut) {
+        setStep("failed");
+        return addLog("Deployments incomplete - missing addresses");
+      }
+      if (!tokenInAddress) {
+        setStep("failed");
+        return addLog("TokenIn not selected");
+      }
+
       const entryPoint = new ethers.Contract(
-        deployments.entryPoint,
+        deployments!.entryPoint,
         [
           ...ENTRYPOINT_ABI,
           "function getNonce(address sender,uint192 key) view returns (uint256)",
-          "function getUserOpHash((address,uint256,bytes,bytes,bytes32,uint256,bytes32,bytes,bytes) userOp) view returns (bytes32)",
+          "function getUserOpHash((address sender,uint256 nonce,bytes initCode,bytes callData,bytes32 accountGasLimits,uint256 preVerificationGas,bytes32 gasFees,bytes paymasterAndData,bytes signature) userOp) view returns (bytes32)",
           "function version() view returns (string)",
         ],
         readProvider,
@@ -796,8 +806,22 @@ export function App() {
         feeAmount: BigNumber,
         gas: { callGas: BigNumber; verifGas: BigNumber; preVerifGas: BigNumber },
       ): UserOpV07 => {
+        console.error("[DEBUG] mkSponsoredUserOp inputs:", {
+          tokenIn: tokenInAddress,
+          tokenOut: deployments.tokenOut,
+          router: deployments.router,
+          paymaster: deployments.paymaster,
+          amountIn: amountIn.toString(),
+          feeAmount: feeAmount.toString(),
+        });
+
+        if (!tokenInAddress) throw new Error("gaslessSwap: tokenInAddress is undefined");
+        if (!deployments.tokenOut) throw new Error("gaslessSwap: deployments.tokenOut is undefined");
+        if (!deployments.router) throw new Error("gaslessSwap: deployments.router is undefined");
+        if (!deployments.paymaster) throw new Error("gaslessSwap: deployments.paymaster is undefined");
+
         const callData = buildExecuteBatchCallData({
-          tokenIn: tokenInAddress!,
+          tokenIn: tokenInAddress,
           tokenOut: deployments.tokenOut,
           router: deployments.router,
           paymaster: deployments.paymaster,
@@ -917,37 +941,10 @@ export function App() {
         u1.eip7702Auth = auth;
       }
 
-      const epVersion = await entryPoint.version().catch(() => "0.6.0");
-      const isV07 = epVersion.startsWith("0.7");
-
-      const entryPointWithCorrectHashing = isV07 ? entryPoint : new ethers.Contract(
-        deployments.entryPoint,
-        [
-          "function getUserOpHash((address,uint256,bytes,bytes,uint256,uint256,uint256,uint256,uint256,bytes,bytes) userOp) view returns (bytes32)"
-        ],
-        readProvider
-      );
-
-      // final hybrid object
       const packed = buildPackedUserOpV07(u1);
 
-      // For v0.6 hashing, we need to pass the v0.6 struct format. 
-      // ethers will handle mapping the hybrid object fields as long as the keys match the v0.6 names or positions.
-      const hashInput = isV07 ? packed : {
-        sender: packed.sender,
-        nonce: packed.nonce,
-        initCode: packed.initCode,
-        callData: packed.callData,
-        callGasLimit: packed.callGasLimit,
-        verificationGasLimit: packed.verificationGasLimit,
-        preVerificationGas: packed.preVerificationGas,
-        maxFeePerGas: packed.maxFeePerGas,
-        maxPriorityFeePerGas: packed.maxPriorityFeePerGas,
-        paymasterAndData: packed.paymasterAndData,
-        signature: packed.signature
-      };
-
-      const userOpHashBytes: HexString = (await entryPointWithCorrectHashing.getUserOpHash(hashInput)) as HexString;
+      // We are now strictly v0.7
+      const userOpHashBytes: HexString = (await entryPoint.getUserOpHash(packed)) as HexString;
       setUserOpHash(userOpHashBytes);
 
       setStep("signing");

@@ -34,6 +34,11 @@ export function buildExecuteBatchCallData(args: {
   feeAmount: BigNumber;
   routerSwapCalldata: HexString;
 }): HexString {
+  if (!args.tokenIn) throw new Error("buildExecuteBatchCallData: tokenIn is undefined");
+  if (!args.tokenOut) throw new Error("buildExecuteBatchCallData: tokenOut is undefined");
+  if (!args.router) throw new Error("buildExecuteBatchCallData: router is undefined");
+  if (!args.paymaster) throw new Error("buildExecuteBatchCallData: paymaster is undefined");
+
   const tokenIface = new ethers.utils.Interface(ERC20_ABI);
   const accountIface = new ethers.utils.Interface(SIMPLE_ACCOUNT_ABI);
 
@@ -105,6 +110,15 @@ export async function signEIP7702Authorization(
 }
 
 export function buildPackedUserOpV07(userOp: UserOpV07): any {
+  if (!userOp.sender) throw new Error("buildPackedUserOpV07: sender is undefined");
+  if (!userOp.nonce) throw new Error("buildPackedUserOpV07: nonce is undefined");
+  if (!userOp.callData) throw new Error("buildPackedUserOpV07: callData is undefined");
+  if (!userOp.callGasLimit) throw new Error("buildPackedUserOpV07: callGasLimit is undefined");
+  if (!userOp.verificationGasLimit) throw new Error("buildPackedUserOpV07: verificationGasLimit is undefined");
+  if (!userOp.preVerificationGas) throw new Error("buildPackedUserOpV07: preVerificationGas is undefined");
+  if (!userOp.maxFeePerGas) throw new Error("buildPackedUserOpV07: maxFeePerGas is undefined");
+  if (!userOp.maxPriorityFeePerGas) throw new Error("buildPackedUserOpV07: maxPriorityFeePerGas is undefined");
+
   const initCode =
     userOp.factory != null ? ethers.utils.hexConcat([userOp.factory, userOp.factoryData ?? "0x"]) : "0x";
 
@@ -131,15 +145,15 @@ export function buildPackedUserOpV07(userOp: UserOpV07): any {
     gasFees,
     paymasterAndData,
     signature: userOp.signature,
-    // v0.6 fields for compatibility
-    callGasLimit: BigNumber.from(userOp.callGasLimit).toHexString(),
-    verificationGasLimit: BigNumber.from(userOp.verificationGasLimit).toHexString(),
-    maxFeePerGas: BigNumber.from(userOp.maxFeePerGas).toHexString(),
-    maxPriorityFeePerGas: BigNumber.from(userOp.maxPriorityFeePerGas).toHexString(),
     // Note: eip7702Auth is passed as an extra field for the bundler to handle
     eip7702Auth: userOp.eip7702Auth,
     // Pass through factory fields for bundlers that expect unpacked inputs (like our demo bundler)
     factory: userOp.factory,
     factoryData: userOp.factoryData,
+    // Pass through paymaster fields for bundlers that expect unpacked inputs
+    paymaster: userOp.paymaster,
+    paymasterVerificationGasLimit: userOp.paymasterVerificationGasLimit,
+    paymasterPostOpGasLimit: userOp.paymasterPostOpGasLimit,
+    paymasterData: userOp.paymasterData,
   };
 }
