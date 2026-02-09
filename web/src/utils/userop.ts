@@ -138,5 +138,8 @@ export function buildPackedUserOpV07(userOp: UserOpV07): any {
     maxPriorityFeePerGas: BigNumber.from(userOp.maxPriorityFeePerGas).toHexString(),
     // Note: eip7702Auth is passed as an extra field for the bundler to handle
     eip7702Auth: userOp.eip7702Auth,
+    // Pass through factory fields for bundlers that expect unpacked inputs (like our demo bundler)
+    factory: userOp.factory,
+    factoryData: userOp.factoryData,
   };
 }

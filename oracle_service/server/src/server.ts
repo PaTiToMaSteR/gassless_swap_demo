@@ -1,4 +1,5 @@
 import express from "express";
+import path from "node:path";
 import cors from "cors";
 import bodyParser from "body-parser";
 import { OracleService } from "./service";
@@ -13,6 +14,13 @@ export class OracleServer {
     ) {
         this.app.use(cors());
         this.app.use(bodyParser.json());
+
+        const publicDir = path.resolve(__dirname, "../public");
+        this.app.use(express.static(publicDir));
+
+        this.app.get("/", (req, res) => {
+            res.sendFile(path.join(publicDir, "index.html"));
+        });
 
         this.app.get("/status", (req, res) => {
             res.json(this.service.status);

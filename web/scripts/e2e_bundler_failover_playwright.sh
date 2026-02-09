@@ -181,7 +181,7 @@ if [[ "$mint" == "1" ]]; then
     node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync(process.argv[1],'utf8')); console.log(j.simpleAccountFactory);" "$DEPLOYMENTS_PATH"
   )"
   tokenInAddr="$(
-    node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync(process.argv[1],'utf8')); console.log(j.tokenIn);" "$DEPLOYMENTS_PATH"
+    node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync(process.argv[1],'utf8')); console.log(j.usdc);" "$DEPLOYMENTS_PATH"
   )"
 
   senderAddr="$(cast call "$factoryAddr" "getAddress(address,uint256)(address)" "$ownerAddr" 0 --rpc-url "$RPC_URL")"
@@ -221,11 +221,21 @@ pwcli_checked run-code "
   }
 
   await page.waitForLoadState('domcontentloaded');
+  
+  // Toggle auto-select OFF if it's ON
+  const autoBtn = page.getByRole('button', { name: "ON" });
+  if (await autoBtn.count() > 0 && await autoBtn.isVisible()) {
+    await autoBtn.click();
+  }
+  
   await page.waitForFunction(() => document.querySelectorAll('select option').length > 0, null, { timeout: 60_000 });
 
   // Select the failing bundler first; the app should automatically failover on send.
   await page.locator('select').selectOption(failId);
   await page.waitForFunction((id) => document.querySelector('select')?.value === id, failId, { timeout: 10_000 });
+
+  // Toggle EIP-7702 Mode OFF
+  await page.getByRole('button', { name: 'ON (Traditional Wallet)' }).click();
 
   await connectBtn.click();
   await page.getByText(/Chain\\s+\\d+/).waitFor({ timeout: 60_000 });

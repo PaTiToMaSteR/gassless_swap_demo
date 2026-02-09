@@ -33,7 +33,7 @@ function App() {
             await fetch("http://localhost:3003/update", { method: "POST" });
             await fetchData();
         } catch (e) {
-            alert("Update failed");
+            console.error("Update failed", e);
         } finally {
             setLoading(false);
         }
@@ -41,53 +41,54 @@ function App() {
 
     return (
         <div className="container">
-            <header>
+            <div className="card">
                 <h1>Oracle Service</h1>
-                <div className="status-badge">
-                    {status?.ready ? <span className="good">Running</span> : <span className="bad">Stopped</span>}
-                </div>
-            </header>
 
-            <main>
-                <section className="panel">
-                    <h2>Current Prices</h2>
-                    <div className="prices-grid">
+                <div className="status-badge">
+                    <div className="status-dot"></div>
+                    {status?.ready ? "Operational" : "Initializing"}
+                </div>
+
+                <div className="button-list">
+                    <button className="action-button" onClick={manualUpdate} disabled={loading}>
+                        {loading ? "Updating..." : "Force Price Update →"}
+                    </button>
+
+                    <button className="action-button" onClick={() => window.open("http://localhost:3003/status", "_blank")}>
+                        Health Check API →
+                    </button>
+
+                    <div style={{ marginTop: '24px', width: '100%' }}>
+                        <div style={{ textAlign: 'left', fontSize: '0.8rem', opacity: 0.5, marginBottom: '12px', fontWeight: 600, letterSpacing: '0.05em' }}>
+                            LIVE PRICES (AVAX)
+                        </div>
                         {status?.prices && Object.entries(status.prices).map(([symbol, price]) => (
                             <div key={symbol} className="price-card">
-                                <div className="symbol">{symbol}</div>
-                                <div className="price">{price.toFixed(6)} AVAX</div>
+                                <span style={{ fontWeight: 500 }}>{symbol}</span>
+                                <span className="mono">{price.toFixed(6)}</span>
                             </div>
                         ))}
-                        {!status?.prices && <div>No prices yet...</div>}
                     </div>
-                    <div className="actions">
-                        <button onClick={manualUpdate} disabled={loading}>
-                            {loading ? "Updating..." : "Force Update Now"}
-                        </button>
-                        <div className="last-update">
-                            Last update: {status?.lastUpdateTs ? format(new Date(status.lastUpdateTs), "HH:mm:ss") : "Never"}
+                </div>
+
+                <div className="footer">
+                    v0.7 • Consensys Demo
+                </div>
+            </div>
+
+            <div className="log-panel">
+                {logs.map((log, i) => (
+                    <div key={i} className={`log-item ${log.updated ? "update" : "skip"} ${log.error ? "error" : ""}`}>
+                        <div className="log-ts">[{format(new Date(log.ts), "HH:mm:ss")}]</div>
+                        <div className="log-msg">
+                            {log.symbol}: {log.priceCheck.toFixed(6)} {log.updated ? "(Updated)" : "(Skipped)"}
+                            {log.txHash && ` [tx: ${log.txHash.slice(0, 8)}...]`}
+                            {log.error && ` [Error: ${log.error}]`}
                         </div>
                     </div>
-                </section>
-
-                <section className="panel">
-                    <h2>Activity Log</h2>
-                    <div className="logs-list">
-                        {logs.map((log, i) => (
-                            <div key={i} className={`log-item ${log.updated ? "update" : "skip"} ${log.error ? "error" : ""}`}>
-                                <div className="ts">{format(new Date(log.ts), "HH:mm:ss")}</div>
-                                <div className="details">
-                                    <span className="symbol">{log.symbol}</span>
-                                    <span className="price">{log.priceCheck.toFixed(6)}</span>
-                                    {log.txHash && <a href={`#`} className="tx">{log.txHash.slice(0, 10)}...</a>}
-                                    {log.error && <span className="err">{log.error}</span>}
-                                </div>
-                            </div>
-                        ))}
-                        {logs.length === 0 && <div className="empty">No logs yet</div>}
-                    </div>
-                </section>
-            </main>
+                ))}
+                {logs.length === 0 && <div className="log-msg">Waiting for logs...</div>}
+            </div>
         </div>
     );
 }

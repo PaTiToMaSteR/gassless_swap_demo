@@ -190,9 +190,7 @@ export class MonitorServer {
     });
 
     this.app.get("/api/public/bundlers", async (_req, res) => {
-      const list = this.bundlers
-        .listPublic()
-        .filter((b) => b.status === "UP" || b.spawned === false);
+      const list = this.bundlers.listPublic();
       res.json(list);
     });
 

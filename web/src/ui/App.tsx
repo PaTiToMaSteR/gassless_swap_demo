@@ -7,6 +7,7 @@ type BundlerQuote = {
   bundlerId: string;
   bundlerName: string;
   feeAmount: string;
+  estimatedAmountOut: string;
   isAvailable: boolean;
   error?: string;
 };
@@ -137,7 +138,13 @@ function format4337ErrorData(data: string): string {
 function formatBundlerRpcError(err: any): string {
   const msg = typeof err?.message === "string" ? err.message : String(err);
   const data = extractRevertData(err?.data ?? err);
-  if (!data) return msg;
+  if (!data) {
+    if (msg === "Error" || msg === "Internal error" || msg === "RPC error") {
+      // If the message is generic, try to show the raw error data if available
+      return `${msg}: ${JSON.stringify(err?.data ?? err)}`;
+    }
+    return msg;
+  }
   return `${msg} — ${format4337ErrorData(data)}`;
 }
 
@@ -247,8 +254,9 @@ export function App() {
 
   const [devWallet, setDevWallet] = useState<ethers.Wallet | null>(null);
 
-  const [pmBalances, setPmBalances] = useState<{ eth: string; tokenIn: string; tokenOut: string }>({
+  const [pmBalances, setPmBalances] = useState<{ eth: string; deposit: string; tokenIn: string; tokenOut: string }>({
     eth: "0",
+    deposit: "0",
     tokenIn: "0",
     tokenOut: "0",
   });
@@ -275,7 +283,10 @@ export function App() {
           const [b, d] = await Promise.all([fetchBundlers(monitorUrl), fetchDeployments(monitorUrl)]);
           setBundlers(b);
           setDeployments(d);
-          if (b.length > 0) setSelectedBundlerId(b[0].id);
+          if (b.length > 0 && !selectedBundlerId) {
+            const best = b.find(inst => inst.status === "UP") ?? b[0];
+            setSelectedBundlerId(best.id);
+          }
         }
       } catch (e: any) {
         setStatusMsg(e?.message ?? "Failed to load monitor data");
@@ -310,15 +321,18 @@ export function App() {
     if (!readProvider || !deployments) return;
     const update = async () => {
       try {
-        const erc20 = new ethers.utils.Interface(["function balanceOf(address) view returns (uint256)"]);
         const pm = deployments.paymaster;
-        const [eth, tIn, tOut] = await Promise.all([
+        const erc20 = new ethers.utils.Interface(["function balanceOf(address) view returns (uint256)"]);
+        const ep = new ethers.Contract(deployments.entryPoint, ["function balanceOf(address) view returns (uint256)"], readProvider);
+        const [eth, deposit, tIn, tOut] = await Promise.all([
           readProvider.getBalance(pm),
+          ep.balanceOf(pm),
           tokenInAddress ? new ethers.Contract(tokenInAddress, erc20, readProvider).balanceOf(pm) : BigNumber.from(0),
           new ethers.Contract(deployments.tokenOut, erc20, readProvider).balanceOf(pm),
         ]);
         setPmBalances({
           eth: eth.toString(),
+          deposit: deposit.toString(),
           tokenIn: tIn.toString(),
           tokenOut: tOut.toString(),
         });
@@ -574,8 +588,8 @@ export function App() {
           const mkUserOp = (gas: any, fee: BigNumber) => ({
             sender,
             nonce: hexBn(nonce),
-            factory: (needsDeployment && !use7702) ? deployments.simpleAccountFactory : undefined,
-            factoryData: (needsDeployment && !use7702) ? factoryData : undefined,
+            factory: needsDeployment ? deployments.simpleAccountFactory : undefined,
+            factoryData: needsDeployment ? factoryData : undefined,
             callData: buildExecuteBatchCallData({
               tokenIn: tokenInAddress!,
               tokenOut: deployments.tokenOut,
@@ -597,6 +611,8 @@ export function App() {
             signature: placeholderSig,
           });
 
+          console.log(`[DEBUG] Bundler ${b.name} - needsDeployment: ${needsDeployment}, factory: ${deployments.simpleAccountFactory}`);
+
           const currentFeeForGas = (gas: any) => {
             const totalGas = BigNumber.from(gas.callGasLimit || gas.callGas)
               .add(BigNumber.from(gas.verificationGasLimit || gas.verifGas))
@@ -609,24 +625,36 @@ export function App() {
 
           const initialFee = currentFeeForGas(gasGuess);
           const est = await jsonRpcCall<any>(b.rpcUrl, "eth_estimateUserOperationGas", [
-            buildPackedUserOpV07(mkUserOp(gasGuess, initialFee) as any),
+            mkUserOp(gasGuess, initialFee),
             deployments.entryPoint
           ]);
 
           const finalFee = currentFeeForGas(est);
+          const amountOut = BigNumber.from(q.amountOut);
+          const estOut = amountOut.sub(finalFee);
+
+          // For the GAS FEE (tUSDC) display, convert the WAVAX fee back to USDC units.
+          const oracle = new ethers.Contract(deployments.oracle, ["function getPrice(address) view returns (uint256)"], readProvider);
+          const oraclePrice = await oracle.getPrice(tokenInAddress!);
+          const feeInUSDC = finalFee.mul(BigNumber.from(10).pow(tokenInDecimals)).div(oraclePrice);
+
           return {
             bundlerId: b.id,
             bundlerName: b.name,
-            feeAmount: finalFee.toString(),
+            feeAmount: feeInUSDC.toString(),
+            estimatedAmountOut: estOut.toString(),
             isAvailable: true
           };
         } catch (e: any) {
+          const errMsg = formatBundlerRpcError(e?.rpc ?? e);
+          addLog(`Estimation failed for ${b.name}: ${errMsg}`);
           return {
             bundlerId: b.id,
             bundlerName: b.name,
             feeAmount: "0",
+            estimatedAmountOut: "0",
             isAvailable: false,
-            error: formatBundlerRpcError(e?.rpc ?? e)
+            error: errMsg
           };
         }
       }));
@@ -643,7 +671,7 @@ export function App() {
         const cheapest = sorted.find(s => s.isAvailable);
         if (cheapest) {
           setSelectedBundlerId(cheapest.bundlerId);
-          addLog(`Auto-selected ${cheapest.bundlerName} (fee: ${formatUnitsSafe(cheapest.feeAmount, tokenOutDecimals)} ${tokenOutSymbol})`);
+          addLog(`Auto-selected ${cheapest.bundlerName} (fee: ${formatUnitsSafe(cheapest.feeAmount, tokenInDecimals)} ${tokenInSymbol}, est out: ${formatUnitsSafe(cheapest.estimatedAmountOut, tokenOutDecimals)} ${tokenOutSymbol})`);
         }
       }
 
@@ -733,8 +761,13 @@ export function App() {
       const needsDeployment = senderCode === "0x" || senderCode === "0x0";
 
       if (needsDeployment) {
-        console.log("Account needs deployment. Factory address:", deployments.simpleAccountFactory);
+        console.error("Account needs deployment. Factory address:", deployments.simpleAccountFactory);
       }
+      console.error("[DEBUG] Sender:", sender);
+      console.error("[DEBUG] SenderCode:", senderCode);
+      console.error("[DEBUG] NeedsDeployment:", needsDeployment);
+      console.error("[DEBUG] Use7702:", use7702);
+      console.error("[DEBUG] Factory:", deployments.simpleAccountFactory);
 
       // Fee floors: to support automatic bundler failover with a single signature, we pick floors that satisfy all UP bundlers.
       const floorBundlers = candidates.some((b) => b.status === "UP") ? candidates.filter((b) => b.status === "UP") : candidates;
@@ -801,7 +834,12 @@ export function App() {
             const result = await jsonRpcCall<{ callGasLimit: string; verificationGasLimit: string; preVerificationGas: string }>(
               b.rpcUrl,
               "eth_estimateUserOperationGas",
-              [buildPackedUserOpV07(userOp), deployments.entryPoint],
+              [(() => {
+                const p = buildPackedUserOpV07(userOp);
+                console.error("[DEBUG] Packed InitCode:", p.initCode);
+                console.error("[DEBUG] Packed Factory:", p.factory);
+                return p;
+              })(), deployments.entryPoint],
             );
             return { gas: result, bundlerId: b.id };
           } catch (e: any) {
@@ -928,7 +966,7 @@ export function App() {
         addLog(`Submitting to ${b.name}…`);
         if (b.id !== selectedBundlerId) setSelectedBundlerId(b.id);
         try {
-          const res = await jsonRpcCall<HexString>(b.rpcUrl, "eth_sendUserOperation", [buildPackedUserOpV07(u1), deployments.entryPoint]);
+          const res = await jsonRpcCall<HexString>(b.rpcUrl, "eth_sendUserOperation", [u1, deployments.entryPoint]);
           // Should equal userOpHashBytes, but trust the chain-computed hash.
           void res;
           acceptedBy = b.id;
@@ -1226,6 +1264,7 @@ export function App() {
             {bundlers.map((b) => (
               <option key={b.id} value={b.id}>
                 {b.name} — {b.policy.strict ? "Strict" : "Fast"}
+                {b.status !== "UP" ? " (Offline)" : ""}
               </option>
             ))}
           </select>
@@ -1271,17 +1310,38 @@ export function App() {
 
       {quote && bundlerQuotes.length > 0 && (
         <div style={{ marginTop: 12 }}>
-          <div className="label">Estimated Fees per Bundler</div>
+          <div className="label">Quotes from Connected Bundlers</div>
           <div style={{ background: "rgba(255,255,255,0.03)", padding: "8px", borderRadius: "8px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", fontSize: "0.8em", opacity: 0.5, marginBottom: "4px", padding: "0 4px" }}>
+              <span>BUNDLER</span>
+              <span style={{ textAlign: "right" }}>GAS FEE ({tokenInSymbol})</span>
+              <span style={{ textAlign: "right" }}>EST. {tokenOutSymbol} OUT</span>
+            </div>
             {bundlerQuotes.map((bq) => (
-              <div key={bq.bundlerId} className="bundler-quote-row">
+              <div key={bq.bundlerId} className="bundler-quote-row" style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr 1fr",
+                padding: "4px",
+                borderRadius: "4px",
+                background: bq.bundlerId === selectedBundlerId ? "rgba(43,213,118,0.1)" : "transparent",
+                border: bq.bundlerId === selectedBundlerId ? "1px solid rgba(43,213,118,0.3)" : "1px solid transparent",
+                cursor: bq.isAvailable ? "pointer" : "default"
+              }}
+                onClick={() => bq.isAvailable && setSelectedBundlerId(bq.bundlerId)}
+              >
                 <span className="mono" style={{ opacity: bq.isAvailable ? 1 : 0.5 }}>
                   {bq.bundlerName}
                 </span>
-                <span className="mono">
+                <span className="mono" style={{ textAlign: "right" }}>
                   {bq.isAvailable
-                    ? `${formatUnitsSafe(bq.feeAmount, tokenOutDecimals)} ${tokenOutSymbol}`
+                    ? formatUnitsSafe(bq.feeAmount, tokenInDecimals)
                     : <span style={{ color: "rgba(255,92,122,0.8)" }}>Error</span>
+                  }
+                </span>
+                <span className="mono" style={{ textAlign: "right", fontWeight: bq.bundlerId === selectedBundlerId ? "bold" : "normal" }}>
+                  {bq.isAvailable
+                    ? formatUnitsSafe(bq.estimatedAmountOut, tokenOutDecimals)
+                    : "—"
                   }
                 </span>
               </div>
@@ -1389,8 +1449,16 @@ export function App() {
         <span>{formatUnitsSafe(pmBalances.tokenOut, tokenOutDecimals)}</span>
       </div>
       <div className="row space mono" style={{ fontSize: "0.85em" }}>
-        <span>Gas (ETH/AVAX):</span>
-        <span>{formatUnitsSafe(pmBalances.eth, 18)}</span>
+        <div className="label">Gas (Sponsorship Balance):</div>
+        <div className="mono">
+          {formatUnitsSafe(pmBalances.deposit, 18)} ETH/AVAX
+        </div>
+      </div>
+      <div className="row space mono" style={{ fontSize: "0.85em" }}>
+        <div className="label">Contract Native:</div>
+        <div className="mono">
+          {formatUnitsSafe(pmBalances.eth, 18)} ETH/AVAX
+        </div>
       </div>
 
       <div style={{ height: 12 }} />

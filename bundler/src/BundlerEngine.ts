@@ -122,29 +122,21 @@ export class BundlerEngine {
 
   async estimateUserOperationGas(userOp: RpcUserOperationV07, entryPoint: string): Promise<any> {
     this._requireEntryPoint(entryPoint);
+    console.log("RX UserOp:", JSON.stringify(userOp, null, 2));
 
-    // Default optional fields for estimation.
-    //
-    // Important: `factory` and `factoryData` must be provided together. Do NOT default `factoryData` unless
-    // `factory` is present, otherwise schema validation will fail.
-    const normalized: RpcUserOperationV07 = {
-      ...userOp,
-      paymasterData: userOp.paymasterData ?? "0x",
-    };
-    if (normalized.factory && !normalized.factoryData) {
-      normalized.factoryData = "0x";
+    if (this.config.entryPoint.toLowerCase() !== entryPoint.toLowerCase()) {
+      throw new RpcError("EntryPoint mismatch", RpcErrorCodes.InvalidParams);
     }
 
-    const packed = packUserOpV07(normalized);
-
+    const normalized = packUserOpV07(userOp);
     // Simulate validation using EntryPointSimulations (v0.7).
-    const sim = await simulateValidationV07(this.provider, this.config.entryPoint, packed);
+    const sim = await simulateValidationV07(this.provider, this.config.entryPoint, normalized);
     const verificationGasLimit = BigNumber.from(sim.returnInfo.preOpGas);
 
     const preVerificationGas =
       BigNumber.from(normalized.preVerificationGas ?? "0x0").gt(0)
         ? BigNumber.from(normalized.preVerificationGas)
-        : BigNumber.from(calcPreVerificationGasV07(packed));
+        : BigNumber.from(calcPreVerificationGasV07(normalized));
 
     // callGasLimit: best-effort estimate. For counterfactual accounts, fall back to a safe default.
     let callGasLimit: BigNumber;
@@ -157,7 +149,7 @@ export class BundlerEngine {
           data: normalized.callData,
         });
       } else {
-        callGasLimit = BigNumber.from(normalized.callGasLimit ?? "0x0");
+        callGasLimit = BigNumber.from(userOp.callGasLimit ?? "0x0");
         if (callGasLimit.eq(0)) callGasLimit = BigNumber.from(1_500_000);
       }
     } catch {

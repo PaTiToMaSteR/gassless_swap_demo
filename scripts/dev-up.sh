@@ -101,7 +101,7 @@ fail_cleanup() {
 }
 
 
-trap fail_cleanup ERR
+
 
 require_cmd anvil
 require_cmd forge
@@ -153,6 +153,17 @@ start_process \
   "cd '${ROOT_DIR}/paymaster_monitor/server' && exec env RPC_URL='${RPC_URL_LOCAL}' DEPLOYMENTS_PATH='../../paymaster/deployments/local/addresses.json' ADMIN_TOKEN='${ADMIN_TOKEN}' DATA_DIR='${DATA_DIR}/monitor' BUNDLER_PRIVATE_KEY='${DEPLOYER_PRIVATE_KEY}' BUNDLER_PORT_RANGE='3100-3199' npm run dev"
 wait_for_http "${MONITOR_URL}/api/public/health" 60
 
+log "Spawning bundler1 and bundler2 via monitor admin API"
+curl -fsS -X POST "${MONITOR_URL}/api/admin/bundlers/spawn" \
+  -H "authorization: Bearer ${ADMIN_TOKEN}" \
+  -H "content-type: application/json" \
+  -d '{"base":"bundler1"}' >/dev/null
+
+curl -fsS -X POST "${MONITOR_URL}/api/admin/bundlers/spawn" \
+  -H "authorization: Bearer ${ADMIN_TOKEN}" \
+  -H "content-type: application/json" \
+  -d '{"base":"bundler2"}' >/dev/null
+
 start_process \
   "quote_service" \
   "cd '${ROOT_DIR}/quote_service' && exec env RPC_URL='${RPC_URL_LOCAL}' DEPLOYMENTS_PATH='../paymaster/deployments/local/addresses.json' DATA_DIR='${DATA_DIR}/quote' LOG_INGEST_URL='${MONITOR_URL}/api/logs/ingest' npm run dev"
@@ -178,21 +189,7 @@ start_process \
   "cd '${ROOT_DIR}/oracle_service/server' && exec env PORT=3003 DEPLOYMENTS_PATH='../../paymaster/deployments/local/addresses.json' DEPLOYER_PRIVATE_KEY='${DEPLOYER_PRIVATE_KEY}' npm run dev"
 wait_for_http "${ORACLE_URL}/status" 60
 
-start_process \
-  "oracle_web" \
-  "cd '${ROOT_DIR}/oracle_service/web' && exec env npm run dev -- --host 127.0.0.1 --port 5176"
-wait_for_http "${ORACLE_WEB_URL}" 90
-
-log "Spawning bundler1 and bundler2 via monitor admin API"
-curl -fsS -X POST "${MONITOR_URL}/api/admin/bundlers/spawn" \
-  -H "authorization: Bearer ${ADMIN_TOKEN}" \
-  -H "content-type: application/json" \
-  -d '{"base":"bundler1"}' >/dev/null
-
-curl -fsS -X POST "${MONITOR_URL}/api/admin/bundlers/spawn" \
-  -H "authorization: Bearer ${ADMIN_TOKEN}" \
-  -H "content-type: application/json" \
-  -d '{"base":"bundler2"}' >/dev/null
+trap fail_cleanup ERR
 
 trap - ERR
 
@@ -203,5 +200,5 @@ log "Monitor:    ${MONITOR_URL}"
 log "Quote API:  ${QUOTE_URL}"
 log "Logs dir:   ${LOG_DIR}"
 log "Explorer:   ${EXPLORER_URL}"
-log "Oracle Service: ${ORACLE_URL} (backend) / ${ORACLE_WEB_URL} (frontend)"
+log "Oracle Service: ${ORACLE_URL}"
 log "Stop all:   ${ROOT_DIR}/scripts/dev-down.sh"

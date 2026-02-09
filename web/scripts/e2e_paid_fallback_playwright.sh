@@ -127,7 +127,7 @@ fi
 
 ownerAddr="$(cast wallet address --private-key "$OWNER_PRIVATE_KEY")"
 tokenInAddr="$(
-  node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync(process.argv[1],'utf8')); console.log(j.tokenIn);" "$DEPLOYMENTS_PATH"
+  node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync(process.argv[1],'utf8')); console.log(j.usdc);" "$DEPLOYMENTS_PATH"
 )"
 
 echo "Minting tokenIn to owner wallet for paid fallback: $ownerAddr"
@@ -155,7 +155,9 @@ pwcli_retry 3 run-code "
   }
 
   await page.waitForLoadState('domcontentloaded');
-  await page.waitForFunction(() => document.querySelectorAll('select option').length > 0, null, { timeout: 60_000 });
+  await page.waitForLoadState('domcontentloaded');
+  // Wait for bundlers to appear in the status panel
+  await page.getByText(/bundler1/i).waitFor({ timeout: 60_000 });
 
   await connectBtn.click({ force: true });
   await page.getByText(/Chain\\s+\\d+/).waitFor({ timeout: 60_000 });

@@ -114,8 +114,16 @@ export async function getPaymasterStatus(args: {
 
   const entryPoint = new ethers.Contract(args.deployments.entryPoint, entryPointAbi, provider);
   const paymaster = new ethers.Contract(args.deployments.paymaster, paymasterAbi, provider);
-  const tokenOut = new ethers.Contract(args.deployments.tokenOut, erc20Abi, provider);
-  const tokenIn = new ethers.Contract(args.deployments.tokenIn, erc20Abi, provider);
+
+  const tokenOutAddr = args.deployments.tokenOut || args.deployments.usdc;
+  const tokenInAddr = args.deployments.tokenIn || args.deployments.bnb || args.deployments.tokenOut || args.deployments.usdc;
+
+  if (!tokenOutAddr) {
+    throw new Error("Neither tokenOut nor usdc address found in deployments");
+  }
+
+  const tokenOut = new ethers.Contract(tokenOutAddr, erc20Abi, provider);
+  const tokenIn = new ethers.Contract(tokenInAddr || ethers.constants.AddressZero, erc20Abi, provider);
 
   const [depositWei, ethBalWei] = await Promise.all([
     entryPoint.balanceOf(args.deployments.paymaster) as Promise<ethers.BigNumber>,

@@ -82,9 +82,9 @@ contract Deploy is Script {
         MockPriceOracle oracle = new MockPriceOracle();
 
         // Seed Oracle prices (relative to 1 ETH/AVAX)
-        // 1 ETH = 2500 USDC (6 decimals) -> 1 USDC = 1/2500 ETH = 400,000,000,000,000 Wei (4e14)
+        // 1 ETH = 1000 USDC (6 decimals) -> 1 USDC = 0.001 ETH = 1,000,000,000,000,000 Wei (1e15)
         // 1 ETH = 5 BNB (18 decimals) -> 1 BNB = 0.2 ETH = 200,000,000,000,000,000 Wei (2e17)
-        oracle.setPrice(address(usdc), 400_000 * 1e9, 6);
+        oracle.setPrice(address(usdc), 1e15, 6);
         oracle.setPrice(address(bnb), 0.2 ether, 18);
 
         // --- Step 3: Swap Infrastructure ---

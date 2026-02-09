@@ -141,7 +141,7 @@ if [[ "$mint" == "1" ]]; then
     node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync(process.argv[1],'utf8')); console.log(j.simpleAccountFactory);" "$DEPLOYMENTS_PATH"
   )"
   tokenInAddr="$(
-    node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync(process.argv[1],'utf8')); console.log(j.tokenIn);" "$DEPLOYMENTS_PATH"
+    node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync(process.argv[1],'utf8')); console.log(j.usdc);" "$DEPLOYMENTS_PATH"
   )"
 
   senderAddr="$(cast call "$factoryAddr" "getAddress(address,uint256)(address)" "$ownerAddr" 0 --rpc-url "$RPC_URL")"
@@ -171,7 +171,11 @@ pwcli_checked run-code "
   }
 
   await page.waitForLoadState('domcontentloaded');
-  await page.waitForFunction(() => document.querySelectorAll('select option').length > 0, null, { timeout: 60_000 });
+  // Wait for bundlers to appear in the status panel
+  await page.getByText(/bundler1/i).waitFor({ timeout: 60_000 });
+
+  // Toggle EIP-7702 Mode OFF (we want to use the Smart Account which has the minted tokens)
+  await page.getByRole('button', { name: 'ON (Traditional Wallet)' }).click();
 
   await connectBtn.click();
   await page.getByText(/Chain\\s+\\d+/).waitFor({ timeout: 60_000 });

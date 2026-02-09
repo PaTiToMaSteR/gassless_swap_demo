@@ -132,7 +132,7 @@ describe("quote_service integration (anvil)", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         chainId: 31337,
-        tokenIn: deployments.tokenIn,
+        tokenIn: deployments.usdc,
         tokenOut: deployments.tokenOut,
         amountIn,
         slippageBps: 50,
@@ -150,7 +150,7 @@ describe("quote_service integration (anvil)", () => {
 
     const iface = new ethers.utils.Interface(routerAbi);
     const decoded = iface.decodeFunctionData("swapExactIn", postRes.route.calldata);
-    expect(decoded[0].toLowerCase()).toBe(deployments.tokenIn.toLowerCase());
+    expect(decoded[0].toLowerCase()).toBe(deployments.usdc.toLowerCase());
     expect(decoded[1].toLowerCase()).toBe(deployments.tokenOut.toLowerCase());
     expect(decoded[2].toString()).toBe(amountIn);
     expect(decoded[4].toLowerCase()).toBe(sender.toLowerCase());
