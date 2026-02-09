@@ -15,12 +15,9 @@ export class PriceFetcher {
         // 1 WAVAX = $1000 -> 1 USDC = $1 = 0.001 WAVAX
         // 1 BNB = $200 = 0.2 WAVAX
 
-        // Add random noise +/- 0.1% (reduced noise for E2E stability)
-        const noise = () => 1 + (Math.random() * 0.002 - 0.001);
-
         return {
-            USDC: 0.001 * noise(),
-            BNB: 0.2 * noise(),
+            USDC: 0.001,
+            BNB: 0.2,
         };
     }
 }

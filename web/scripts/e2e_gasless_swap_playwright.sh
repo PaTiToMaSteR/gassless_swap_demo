@@ -174,8 +174,8 @@ pwcli_checked run-code "
   // Wait for bundlers to appear in the status panel
   await page.getByText(/bundler1/i).waitFor({ timeout: 60_000 });
 
-  // Toggle EIP-7702 Mode OFF (we want to use the Smart Account which has the minted tokens)
-  await page.getByRole('button', { name: 'ON (Traditional Wallet)' }).click();
+  // Ensure EIP-7702 Mode is OFF (Smart Account)
+  await page.getByRole('button', { name: 'OFF (Smart Account)' }).waitFor({ state: 'visible', timeout: 5000 });
 
   await connectBtn.click();
   await page.getByText(/Chain\\s+\\d+/).waitFor({ timeout: 60_000 });
